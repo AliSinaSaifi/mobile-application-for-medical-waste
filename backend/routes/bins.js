@@ -40,12 +40,22 @@ router.get('/predict/:binId', async (req, res) => {
 
     const history = data.map(i => [i.fullness, new Date(i.timestamp).getTime() / 1000]);
 
-    try {
-      const { data: pyData } = await axios.post('http://localhost:8000/predict', { history }, { timeout: 2000 });
-      return res.json({ binId, ...pyData });
-    } catch {
-      return res.json({ binId, target_timestamp: Math.floor(Date.now() / 1000) + 3600, confidence: 94, hours_until_full: 2.5, note: 'AI offline, showing fallback' });
+    const mlBase = (process.env.ML_SERVICE_URL || '').trim().replace(/\/+$/, '');
+    if (mlBase) {
+      try {
+        const { data: pyData } = await axios.post(`${mlBase}/predict`, { history }, { timeout: 2000 });
+        return res.json({ binId, ...pyData });
+      } catch {
+        /* fall through to fallback */
+      }
     }
+    return res.json({
+      binId,
+      target_timestamp: Math.floor(Date.now() / 1000) + 3600,
+      confidence: 94,
+      hours_until_full: 2.5,
+      note: mlBase ? 'AI unreachable, showing fallback' : 'AI not configured (ML_SERVICE_URL), showing fallback',
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

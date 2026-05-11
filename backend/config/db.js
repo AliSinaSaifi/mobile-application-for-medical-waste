@@ -1,9 +1,8 @@
 const { Sequelize } = require('sequelize');
-const mongoose      = require('mongoose');
-const redis         = require('redis');
+const mongoose = require('mongoose');
+const redis = require('redis');
 require('dotenv').config();
 
-// ── PostgreSQL ────────────────────────────────────────────────
 const sequelize = new Sequelize(process.env.POSTGRES_URI, {
   dialect: 'postgres',
   logging: false,
@@ -19,7 +18,6 @@ async function connectPostgres() {
   }
 }
 
-// ── MongoDB ───────────────────────────────────────────────────
 async function connectMongo() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
@@ -29,14 +27,17 @@ async function connectMongo() {
   }
 }
 
-// ── Redis ─────────────────────────────────────────────────────
-const redisClient = redis.createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379',
-});
-
-redisClient.on('error', (err) => console.error('❌ Redis error:', err.message));
+let redisClient = null;
+if (process.env.REDIS_URL) {
+  redisClient = redis.createClient({ url: process.env.REDIS_URL });
+  redisClient.on('error', (err) => console.error('❌ Redis error:', err.message));
+}
 
 async function connectRedis() {
+  if (!redisClient) {
+    console.warn('⚠️ REDIS_URL not set — Redis session / rate-limit features are disabled');
+    return;
+  }
   try {
     await redisClient.connect();
     console.log('✅ Redis connected');
@@ -45,5 +46,4 @@ async function connectRedis() {
   }
 }
 
-// ── Export — всегда в конце файла ────────────────────────────
 module.exports = { sequelize, redisClient, connectPostgres, connectMongo, connectRedis };

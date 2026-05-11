@@ -66,7 +66,7 @@ async function sendTaskAssignedEmail(driverEmail, driverName, containerId, locat
             </tr>
           </table>
           <p>Please collect the waste as soon as possible.</p>
-          <a href="http://localhost:5173/dashboard/driver-dashboard"
+          <a href="${(process.env.CLIENT_URL || '').split(',')[0].trim() || '#'}/dashboard/driver-dashboard"
              style="display:inline-block;background:#1A6EFF;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">
             Open Dashboard →
           </a>

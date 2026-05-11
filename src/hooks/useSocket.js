@@ -1,7 +1,6 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { io } from "socket.io-client";
-
-const SOCKET_URL = "http://localhost:5000";
+import { SOCKET_URL } from "../config/api";
 
 let sharedSocket = null; // single connection across components
 

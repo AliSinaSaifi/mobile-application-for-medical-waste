@@ -1,10 +1,21 @@
 import React from 'react';
-import { NativeModules, Platform, StatusBar as NativeStatusBar, StyleSheet, Text, View } from 'react-native';
+import { Platform, StatusBar as NativeStatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 
-const WEB_APP_URL = process.env.EXPO_PUBLIC_WEB_APP_URL || 'http://192.168.44.142:5176';
+function normalizeWebAppUrl(raw) {
+  if (raw == null || typeof raw !== 'string') return '';
+  return raw.trim();
+}
+
+const WEB_APP_URL = normalizeWebAppUrl(process.env.EXPO_PUBLIC_WEB_APP_URL);
+
+if (!WEB_APP_URL) {
+  throw new Error(
+    'EXPO_PUBLIC_WEB_APP_URL is not set. Point it to your deployed Vite SPA (HTTPS), e.g. https://app.example.com'
+  );
+}
 
 export default function App() {
   const androidTopInset = Platform.OS === 'android' ? (NativeStatusBar.currentHeight || 0) : 0;
@@ -19,13 +30,13 @@ export default function App() {
         javaScriptEnabled
         domStorageEnabled
         allowsInlineMediaPlayback
-        originWhitelist={['*']}
+        originWhitelist={['https://', 'http://']}
         renderError={() => (
           <View style={styles.errorWrap}>
             <Text style={styles.errorTitle}>Cannot open MedWaste UI</Text>
-            <Text style={styles.errorText}>Make sure the web app is running at:</Text>
+            <Text style={styles.errorText}>The web app URL from EXPO_PUBLIC_WEB_APP_URL could not be loaded.</Text>
             <Text style={styles.url}>{WEB_APP_URL}</Text>
-            <Text style={styles.errorHint}>Start it with: npm run dev -- --host</Text>
+            <Text style={styles.errorHint}>Verify the URL is reachable over HTTPS and rebuild the app with the correct env.</Text>
           </View>
         )}
       />
@@ -63,6 +74,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
     color: '#64748b',
+    textAlign: 'center',
   },
   url: {
     fontSize: 14,

@@ -1,9 +1,7 @@
 import axios from "axios";
+import { API_BASE_URL } from "../config/api";
 
-const API_HOST = typeof window !== "undefined" ? window.location.hostname : "localhost";
-const BASE = `http://${API_HOST}:5000`;
-
-const api = axios.create({ baseURL: BASE });
+const api = axios.create({ baseURL: API_BASE_URL });
 
 // Auto-attach token to every request
 api.interceptors.request.use((config) => {

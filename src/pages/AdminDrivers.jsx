@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import { getPendingDrivers, updateDriverStatus } from "../services/api";
 
 const AdminDrivers = () => {
   const [requests, setRequests] = useState([]);
@@ -8,30 +8,19 @@ const AdminDrivers = () => {
     fetchRequests();
   }, []);
 
-  // 1. Функция загрузки заявок
   const fetchRequests = async () => {
     try {
-      const token = sessionStorage.getItem("mw_token");
-      const res = await axios.get("http://localhost:5000/api/admin/drivers/pending", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await getPendingDrivers();
       setRequests(res.data);
     } catch (err) {
       console.error("Fetch error:", err);
     }
   };
 
-  // 2. Функция одобрения/отклонения (ВОТ ОНА БЫЛА ПОТЕРЯНА)
   const handleAction = async (id, status) => {
     try {
-      const token = sessionStorage.getItem("mw_token");
-      await axios.patch(`http://localhost:5000/api/admin/drivers/${id}/status`, 
-        { status }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      // Обновляем список локально, чтобы строка исчезла
-      setRequests(requests.filter(r => r._id !== id));
+      await updateDriverStatus(id, status);
+      setRequests((prev) => prev.filter((r) => r._id !== id));
       alert(`Driver ${status}!`);
     } catch (err) {
       console.error(err);

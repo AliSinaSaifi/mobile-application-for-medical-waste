@@ -1,9 +1,14 @@
 const axios = require('axios');
 
-const API = 'http://localhost:5000/api/telemetry';
+const base = (process.env.BACKEND_BASE_URL || '').trim().replace(/\/+$/, '');
+if (!base) {
+  console.error('Set BACKEND_BASE_URL to your API root (same host as /api), e.g. https://your-service.up.railway.app');
+  process.exit(1);
+}
+
+const API = `${base}/api/telemetry`;
 
 // ── Bin configurations ────────────────────────────────────────
-// Each bin has different fill rate to simulate real usage patterns
 const bins = [
   { id: 'MED-001', fullness: 15, fillRate: 2.5,  label: 'Surgery Ward'       },
   { id: 'MED-002', fullness: 60, fillRate: 1.0,  label: 'Therapy Dept'       },
@@ -13,6 +18,7 @@ const bins = [
 ];
 
 console.log('🚀 Mock sensor started — simulating 5 medical waste containers');
+console.log(`   POST → ${API}`);
 console.log('─'.repeat(55));
 bins.forEach(b => console.log(`  ${b.id}  ${b.label.padEnd(18)} starting at ${b.fullness}%`));
 console.log('─'.repeat(55));
@@ -30,22 +36,18 @@ async function sendReading(bin) {
   }
 }
 
-// ── Simulation tick ───────────────────────────────────────────
 setInterval(async () => {
   for (const bin of bins) {
-    // Add fill rate + small random noise
-    const noise = (Math.random() - 0.3) * 1.5; // slight variance
+    const noise = (Math.random() - 0.3) * 1.5;
     bin.fullness += bin.fillRate + noise;
 
-    // Reset when emptied (simulates collection)
     if (bin.fullness >= 100) {
       console.log(`\n✅ ${bin.id} COLLECTED — reset to 5%\n`);
       bin.fullness = 5 + Math.random() * 10;
     }
 
-    // Clamp to 0-100
     bin.fullness = Math.max(0, Math.min(100, bin.fullness));
 
     await sendReading(bin);
   }
-}, 50000); // every 5 seconds
+}, 50000);
