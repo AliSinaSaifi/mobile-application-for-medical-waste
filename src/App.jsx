@@ -13,10 +13,10 @@ import Reports            from "./pages/Reports";
 import DriverRegistration from "./pages/DriverRegistration";
 import RouteHistory       from "./pages/RouteHistory";
 import Profile            from "./pages/Profile";
-import AdminApprovals     from "./pages/AdminApprovals";
+import AdminApprovals     from "./pages/Adminapprovals.jsx";
 import AdminDispatch      from "./pages/AdminDispatch";
 import UtilizerPage       from "./pages/Utilizerpage.jsx";
-import UtilizerRegistration from "./pages/UtilizerRegistration";
+import UtilizerRegistration from "./pages/Utilizerregistration.jsx";
 import DriverDashboard from "./pages/Driverdashboard";
 import AdminUsers         from "./pages/AdminUsers";
 
