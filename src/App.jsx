@@ -22,7 +22,7 @@ import AdminUsers         from "./pages/AdminUsers";
 
 // Components
 import Layout       from "./components/Layout";
-import PrivateRoute from "./components/PrivateRoute";
+import PrivateRoute from "./components/Privateroute.jsx";
 
 function App() {
   return (
