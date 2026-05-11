@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "MedWaste Mobile",
+    "slug": "medwaste-mobile",
+    "scheme": "medwaste",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.medwaste.mobile"
+    },
+    "android": {
+      "package": "com.medwaste.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      }
+    }
+  }
+}
