@@ -3,12 +3,17 @@ const mongoose = require('mongoose');
 const redis = require('redis');
 require('dotenv').config();
 
-const sequelize = new Sequelize(process.env.POSTGRES_URI, {
-  dialect: 'postgres',
-  logging: false,
-});
+// ── PostgreSQL ─────────────────────────────────────────────────
+// Sequelize throws synchronously when the URI is undefined, so guard it.
+const sequelize = process.env.POSTGRES_URI
+  ? new Sequelize(process.env.POSTGRES_URI, { dialect: 'postgres', logging: false })
+  : null;
 
 async function connectPostgres() {
+  if (!sequelize) {
+    console.warn('⚠️  POSTGRES_URI not set — PostgreSQL is disabled');
+    return;
+  }
   try {
     await sequelize.authenticate();
     await sequelize.sync({ alter: false });
@@ -18,7 +23,12 @@ async function connectPostgres() {
   }
 }
 
+// ── MongoDB ───────────────────────────────────────────────────
 async function connectMongo() {
+  if (!process.env.MONGO_URI) {
+    console.warn('⚠️  MONGO_URI not set — MongoDB is disabled');
+    return;
+  }
   try {
     await mongoose.connect(process.env.MONGO_URI);
     console.log('✅ MongoDB connected');
@@ -27,6 +37,7 @@ async function connectMongo() {
   }
 }
 
+// ── Redis ─────────────────────────────────────────────────────
 let redisClient = null;
 if (process.env.REDIS_URL) {
   redisClient = redis.createClient({ url: process.env.REDIS_URL });
@@ -35,7 +46,7 @@ if (process.env.REDIS_URL) {
 
 async function connectRedis() {
   if (!redisClient) {
-    console.warn('⚠️ REDIS_URL not set — Redis session / rate-limit features are disabled');
+    console.warn('⚠️  REDIS_URL not set — Redis session / rate-limit features are disabled');
     return;
   }
   try {

@@ -7,11 +7,16 @@ const { connectPostgres, connectMongo, connectRedis } = require('./config/db');
 const { initSocket } = require('./services/Socket');
 const { buildAllowedOrigins, createCorsOriginCallback } = require('./config/cors');
 
-require('./models/pg/User');
-require('./models/pg/Driver');
-require('./models/pg/Task');
-require('./models/pg/Container');
-require('./models/pg/Utilizer');
+// Only load Sequelize models when a Postgres URI is actually configured.
+// The models call sequelize.define() at module load time; requiring them
+// when sequelize is null crashes the process before any env-flag check runs.
+if (process.env.POSTGRES_URI) {
+  require('./models/pg/User');
+  require('./models/pg/Driver');
+  require('./models/pg/Task');
+  require('./models/pg/Container');
+  require('./models/pg/Utilizer');
+}
 
 const app = express();
 const server = http.createServer(app);
