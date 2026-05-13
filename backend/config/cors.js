@@ -21,12 +21,14 @@ function buildAllowedOrigins() {
 /**
  * Express cors `origin` callback — production-safe: only configured origins.
  * Requests with no `Origin` header (native apps, curl) are allowed.
+ * IMPORTANT: Never throw errors in this callback. Return callback(null, false) for blocked origins.
  */
 function createCorsOriginCallback(allowedOrigins) {
   return (origin, callback) => {
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
+    console.warn(`[CORS] Blocked origin: ${origin}`);
+    return callback(null, false);
   };
 }
 

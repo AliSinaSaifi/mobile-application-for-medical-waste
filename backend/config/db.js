@@ -3,15 +3,17 @@ const mongoose = require('mongoose');
 const redis = require('redis');
 require('dotenv').config();
 
+const postgresUri = process.env.POSTGRES_URI || process.env.DATABASE_URL;
+
 // ── PostgreSQL ─────────────────────────────────────────────────
 // Sequelize throws synchronously when the URI is undefined, so guard it.
-const sequelize = process.env.POSTGRES_URI
-  ? new Sequelize(process.env.POSTGRES_URI, { dialect: 'postgres', logging: false })
+const sequelize = postgresUri
+  ? new Sequelize(postgresUri, { dialect: 'postgres', logging: false })
   : null;
 
 async function connectPostgres() {
   if (!sequelize) {
-    console.warn('⚠️  POSTGRES_URI not set — PostgreSQL is disabled');
+    console.warn('⚠️  POSTGRES_URI/DATABASE_URL not set — PostgreSQL is disabled');
     return;
   }
   try {

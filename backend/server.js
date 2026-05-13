@@ -36,7 +36,7 @@ if (allowedOrigins.length === 0) {
 app.use(
   cors({
     origin: createCorsOriginCallback(allowedOrigins),
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
