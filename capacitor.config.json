@@ -1,0 +1,6 @@
+{
+  "appId": "com.aitu.medwaste",
+  "appName": "MedWaste",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
