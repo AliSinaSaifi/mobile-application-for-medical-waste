@@ -1,5 +1,6 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from "react-router-dom";
 
 // Pages
 import Home               from "./pages/Home";
@@ -23,11 +24,15 @@ import AdminUsers         from "./pages/AdminUsers";
 // Components
 import Layout       from "./components/Layout";
 import PrivateRoute from "./components/Privateroute.jsx";
+import ApiConfigBanner from "./components/ApiConfigBanner.jsx";
+
+const Router = Capacitor.isNativePlatform() ? HashRouter : BrowserRouter;
 
 function App() {
   return (
     <div className="mobile-shell">
-      <BrowserRouter>
+      <Router>
+        <ApiConfigBanner />
         <Routes>
 
         {/* ── Public ──────────────────────────────────────── */}
@@ -118,7 +123,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
 
         </Routes>
-      </BrowserRouter>
+      </Router>
     </div>
   );
 }

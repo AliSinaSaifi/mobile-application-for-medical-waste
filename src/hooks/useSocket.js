@@ -10,7 +10,7 @@ export function useSocket(handlers = {}) {
 
   useEffect(() => {
     const token = sessionStorage.getItem("mw_token");
-    if (!token) return;
+    if (!token || !SOCKET_URL) return;
 
     // Reuse existing connection
     if (!sharedSocket) {

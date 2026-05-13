@@ -1,7 +1,7 @@
 import axios from "axios";
-import { API_BASE_URL } from "../config/api";
+import { API_BASE_URL, isApiConfigured } from "../config/api";
 
-const api = axios.create({ baseURL: API_BASE_URL });
+const api = axios.create({ baseURL: isApiConfigured ? API_BASE_URL : "/" });
 
 // Auto-attach token to every request
 api.interceptors.request.use((config) => {
