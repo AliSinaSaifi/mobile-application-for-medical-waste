@@ -1,10 +1,14 @@
 import axios from "axios";
-import { API_BASE_URL, isApiConfigured } from "../config/api";
+import { API_BASE_URL, MISSING_API_URL_MESSAGE } from "../config/api";
 
-const api = axios.create({ baseURL: isApiConfigured ? API_BASE_URL : "/" });
+const api = axios.create({ baseURL: API_BASE_URL });
 
 // Auto-attach token to every request
 api.interceptors.request.use((config) => {
+  if (!API_BASE_URL) {
+    return Promise.reject(new Error(MISSING_API_URL_MESSAGE));
+  }
+
   const token = sessionStorage.getItem("mw_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;

@@ -14,7 +14,7 @@ export default function ApiConfigBanner() {
         borderBottom: "1px solid #fcd34d",
       }}
     >
-      <strong>API URL missing.</strong> This app was built without{" "}
+      <strong>API URL missing. Rebuild app with correct VITE_API_URL.</strong> This app was built without{" "}
       <code style={{ background: "#fde68a", padding: "0 4px" }}>VITE_API_URL</code>. Rebuild the web
       app with your Railway HTTPS API, then run{" "}
       <code style={{ background: "#fde68a", padding: "0 4px" }}>npx cap sync android</code>.
