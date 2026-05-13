@@ -5,7 +5,12 @@ require('dotenv').config();
 
 const { connectPostgres, connectMongo, connectRedis } = require('./config/db');
 const { initSocket } = require('./services/Socket');
-const { buildAllowedOrigins, createCorsOriginCallback } = require('./config/cors');
+const {
+  DEFAULT_ALLOWED_ORIGINS,
+  buildAllowedOrigins,
+  parseOriginList,
+  createCorsOriginCallback,
+} = require('./config/cors');
 
 // Only load Sequelize models when a Postgres URI is actually configured.
 // The models call sequelize.define() at module load time; requiring them
@@ -26,10 +31,12 @@ const isEnabled = (value, defaultValue = true) => {
   return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
 };
 
+const configuredClientOrigins = parseOriginList(process.env.CLIENT_URL);
+const configuredExtraOrigins = parseOriginList(process.env.CORS_EXTRA_ORIGINS);
 const allowedOrigins = buildAllowedOrigins();
-if (allowedOrigins.length === 0) {
+if (configuredClientOrigins.length === 0 && configuredExtraOrigins.length === 0) {
   console.warn(
-    '⚠️  No CLIENT_URL (or CORS_EXTRA_ORIGINS) configured — browser CORS requests will be rejected until you set allowed origins.'
+    `⚠️  No CLIENT_URL (or CORS_EXTRA_ORIGINS) configured — using default localhost/Capacitor origins only: ${DEFAULT_ALLOWED_ORIGINS.join(', ')}`
   );
 }
 
