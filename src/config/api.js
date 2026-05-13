@@ -14,6 +14,13 @@ export const isApiConfigured = Boolean(API_URL);
 
 export const MISSING_API_URL_MESSAGE = "API URL missing. Rebuild app with correct VITE_API_URL";
 
+// Debug: Show what environment value was used at build time
+if (import.meta.env.DEV || !API_URL) {
+  console.log("[API Config] VITE_API_URL (raw) =", import.meta.env.VITE_API_URL);
+  console.log("[API Config] API_BASE_URL (normalized) =", API_URL);
+  console.log("[API Config] isApiConfigured =", isApiConfigured);
+}
+
 if (!API_URL) {
   console.error(MISSING_API_URL_MESSAGE);
 }
