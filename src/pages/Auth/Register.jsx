@@ -1,12 +1,15 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { register } from "../../services/api";
+import { register, sendAuthOtp, verifyAuthOtp } from "../../services/api";
 
 const Register = () => {
-  const [form, setForm]       = useState({ fullName: "", username: "", email: "", password: "", confirmPassword: "" });
+  const [form, setForm]       = useState({ fullName: "", username: "", email: "", phoneNumber: "", password: "", confirmPassword: "" });
   const [error, setError]     = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState('form');
+  const [otp, setOtp] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
   const navigate = useNavigate();
 
   const handleRegister = async (e) => {
@@ -20,9 +23,17 @@ const Register = () => {
 
     setLoading(true);
     try {
-      await register(form.fullName, form.username, form.email, form.password);
-      setSuccess("Registered successfully. Redirecting to login...");
-      setTimeout(() => navigate("/login"), 1200);
+      const res = await register(form.fullName, form.username, form.email, form.password, form.phoneNumber);
+      const msg = res.data?.message || '';
+      if (form.phoneNumber) {
+        setSuccess('OTP sent to your phone. Enter the code to verify.');
+        setStep('verify');
+        // start resend cooldown
+        setResendCooldown(Number(process.env.REACT_APP_OTP_RESEND_COOLDOWN || 60));
+      } else {
+        setSuccess("Registered successfully. Redirecting to login...");
+        setTimeout(() => navigate("/login"), 1200);
+      }
     } catch (err) {
       setError(err.response?.data?.error || "Registration failed.");
     } finally {
@@ -32,6 +43,13 @@ const Register = () => {
 
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
+  // countdown for resend
+  React.useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setInterval(() => setResendCooldown(c => c - 1), 1000);
+    return () => clearInterval(t);
+  }, [resendCooldown]);
+
   return (
     <div className="auth-page">
       <div className="auth-container">
@@ -40,11 +58,17 @@ const Register = () => {
           <p>Create a new account to access the system.</p>
         </div>
 
+        {step === 'form' && (
         <form className="auth-form" onSubmit={handleRegister}>
           <div className="form-group">
             <label>Full Name</label>
             <input type="text" placeholder="Dr. Jane Smith" required
               value={form.fullName} onChange={set("fullName")} />
+          </div>
+          <div className="form-group">
+            <label>Phone Number</label>
+            <input type="tel" placeholder="+77051234567" required
+              value={form.phoneNumber} onChange={set("phoneNumber")} />
           </div>
           <div className="form-group">
             <label>Username</label>
@@ -86,6 +110,42 @@ const Register = () => {
             {loading ? "Creating account…" : "Create Account"}
           </button>
         </form>
+        )}
+
+        {step === 'verify' && (
+          <div className="auth-form">
+            <div className="form-group">
+              <label>Enter OTP</label>
+              <input type="text" placeholder="123456" value={otp} onChange={(e) => setOtp(e.target.value)} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={async () => {
+                try {
+                  const res = await verifyAuthOtp(form.phoneNumber, form.email, otp);
+                  const data = res.data;
+                  sessionStorage.setItem('mw_logged_in','true');
+                  sessionStorage.setItem('mw_token', data.token);
+                  sessionStorage.setItem('mw_user', data.email);
+                  sessionStorage.setItem('mw_role', data.role);
+                  sessionStorage.setItem('mw_name', data.fullName || data.email.split('@')[0]);
+                  sessionStorage.setItem('mw_username', data.username || '');
+                  navigate('/dashboard');
+                } catch (err) {
+                  setError(err.response?.data?.error || 'Verification failed');
+                }
+              }}>Verify</button>
+              <button className="btn btn-ghost" disabled={resendCooldown>0} onClick={async () => {
+                try {
+                  await sendAuthOtp(form.phoneNumber, form.email);
+                  setSuccess('OTP resent');
+                  setResendCooldown(60);
+                } catch (err) {
+                  setError(err.response?.data?.error || 'Failed to resend OTP');
+                }
+              }}>{resendCooldown>0 ? `Resend (${resendCooldown}s)` : 'Resend OTP'}</button>
+            </div>
+          </div>
+        )}
 
         <p className="auth-footer">
           Already have an account? <Link to="/login">Log In</Link>

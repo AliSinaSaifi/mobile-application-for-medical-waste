@@ -6,6 +6,8 @@ const { sequelize } = require('../config/db');
 const { saveSession, deleteSession } = require('../services/redis');
 const { authenticate } = require('../middleware/auth');
 const { validateProfilePayload } = require('../services/profile');
+const { generateVerificationCode, hashVerificationCode } = require('../services/profile');
+const { sendSms } = require('../services/smsService');
 
 const SECRET = process.env.JWT_SECRET || 'supersecretkey';
 const REDIS_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.ENABLE_REDIS ?? 'true').toLowerCase());
@@ -13,7 +15,7 @@ const REDIS_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.ENA
 // ── POST /api/auth/register ───────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { fullName, username, email, password, role } = req.body;
+    const { fullName, username, email, phoneNumber, password, role } = req.body;
 
     if (!email || !password || !username || !fullName) {
       return res.status(400).json({ error: 'Full name, username, email and password are required' });
@@ -39,13 +41,85 @@ router.post('/register', async (req, res) => {
       fullName: fullName.trim(),
       username: username.trim(),
       email,
+      phoneNumber: phoneNumber ? phoneNumber.trim() : null,
       password: hashed,
       role: safeRole,
+      phoneVerified: false,
     });
 
-    res.status(201).json({ ok: true, message: 'User created' });
+    // If phone provided, generate OTP and send SMS
+    if (phoneNumber) {
+      const code = generateVerificationCode();
+      const hash = hashVerificationCode(code);
+      const ttlMinutes = Number(process.env.PHONE_VERIFICATION_TTL_MINUTES || 5);
+      const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+      await newUser.update({ phoneVerificationCodeHash: hash, phoneVerificationExpiresAt: expiresAt });
+      const smsRes = await sendSms(phoneNumber.trim(), `Your MedWaste verification code is ${code}`);
+      if (!smsRes.ok) console.warn('SMS send failed:', smsRes.error);
+      return res.status(201).json({ ok: true, message: 'User created. OTP sent to phone.' });
+    }
+
+    return res.status(201).json({ ok: true, message: 'User created' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/send-otp
+router.post('/send-otp', async (req, res) => {
+  try {
+    const { phoneNumber, email } = req.body;
+    if (!phoneNumber && !email) return res.status(400).json({ error: 'phoneNumber or email required' });
+
+    const user = phoneNumber
+      ? await User.findOne({ where: { phoneNumber: phoneNumber.trim() } })
+      : await User.findOne({ where: { email } });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const code = generateVerificationCode();
+    const hash = hashVerificationCode(code);
+    const ttlMinutes = Number(process.env.PHONE_VERIFICATION_TTL_MINUTES || 5);
+    const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+    await user.update({ phoneVerificationCodeHash: hash, phoneVerificationExpiresAt: expiresAt, phoneVerified: false });
+
+    const smsRes = await sendSms(user.phoneNumber, `Your MedWaste verification code is ${code}`);
+    if (!smsRes.ok) return res.status(500).json({ error: 'Failed to send SMS' });
+    return res.json({ ok: true, message: 'OTP sent' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/verify-otp
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { email, phoneNumber, code } = req.body;
+    if (!code || (!email && !phoneNumber)) return res.status(400).json({ error: 'code and email/phoneNumber are required' });
+
+    const user = phoneNumber
+      ? await User.findOne({ where: { phoneNumber: phoneNumber.trim() } })
+      : await User.findOne({ where: { email } });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.phoneVerificationCodeHash || !user.phoneVerificationExpiresAt) return res.status(400).json({ error: 'No OTP requested' });
+    if (new Date(user.phoneVerificationExpiresAt) < new Date()) return res.status(400).json({ error: 'OTP expired' });
+
+    const matches = hashVerificationCode(code.trim()) === user.phoneVerificationCodeHash;
+    if (!matches) return res.status(400).json({ error: 'Invalid OTP' });
+
+    await user.update({ phoneVerified: true, phoneVerificationCodeHash: null, phoneVerificationExpiresAt: null });
+
+    // sign JWT and return so frontend can log in immediately
+    const token = require('jsonwebtoken').sign(
+      { userId: user.id, email: user.email, role: user.role, fullName: user.fullName, username: user.username },
+      process.env.JWT_SECRET || 'supersecretkey',
+      { expiresIn: '7d' }
+    );
+
+    return res.json({ ok: true, message: 'Phone verified', token, email: user.email, fullName: user.fullName, username: user.username, role: user.role });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -64,6 +138,10 @@ router.post('/login', async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
+    // Block login if phone not verified
+    if (!user.phoneVerified) {
+      return res.status(403).json({ error: 'Phone not verified', phoneNotVerified: true });
+    }
 
     // Sign JWT with role
     const token = jwt.sign(
