@@ -18,10 +18,11 @@ async function ensureUserProfileColumns() {
   const table = await queryInterface.describeTable('users');
 
   const addIfMissing = async (columnName, spec) => {
-    if (!table[columnName]) {
-      await queryInterface.addColumn('users', columnName, spec);
-      console.log(`✅ Added users.${columnName}`);
-    }
+    const exists = Object.keys(table).some((k) => k.toLowerCase() === columnName.toLowerCase());
+    if (exists) return;
+    await queryInterface.addColumn('users', columnName, spec);
+    table[columnName] = spec;
+    console.log(`✅ Added users.${columnName}`);
   };
 
   // Ensure fullName exists (may be missing on very old installs)
@@ -101,12 +102,39 @@ async function ensureUserProfileColumns() {
     defaultValue: false,
   });
 
-  await addIfMissing('phoneVerificationCodeHash', {
+  await addIfMissing('otpHash', {
     type: Sequelize.STRING(255),
     allowNull: true,
   });
 
-  await addIfMissing('phoneVerificationExpiresAt', {
+  await addIfMissing('otpExpiresAt', {
+    type: Sequelize.DATE,
+    allowNull: true,
+  });
+
+  await addIfMissing('otpAttempts', {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+  });
+
+  await addIfMissing('otpResendCount', {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+  });
+
+  await addIfMissing('otpLastSentAt', {
+    type: Sequelize.DATE,
+    allowNull: true,
+  });
+
+  await addIfMissing('otpResendWindowStartedAt', {
+    type: Sequelize.DATE,
+    allowNull: true,
+  });
+
+  await addIfMissing('otpLockedUntil', {
     type: Sequelize.DATE,
     allowNull: true,
   });

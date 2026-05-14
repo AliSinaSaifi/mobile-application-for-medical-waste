@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loginRequest, registerRequest } from '../services/api';
+import {
+  loginRequest,
+  registerRequest,
+  sendAuthOtpRequest,
+  verifyAuthOtpRequest,
+} from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -24,7 +29,13 @@ export function AuthProvider({ children }) {
         const nameVal = fullName[1];
 
         if (tokenVal && emailVal) {
-          setUser({ token: tokenVal, email: emailVal, role: roleVal, fullName: nameVal, username: username[1] });
+          setUser({
+            token: tokenVal,
+            email: emailVal,
+            role: roleVal,
+            fullName: nameVal,
+            username: username[1],
+          });
         }
       } finally {
         setLoading(false);
@@ -34,10 +45,7 @@ export function AuthProvider({ children }) {
     restore();
   }, []);
 
-  const login = async (email, password) => {
-    const res = await loginRequest(email, password);
-    const data = res.data;
-
+  const persistSession = async (data) => {
     await AsyncStorage.multiSet([
       ['mw_logged_in', 'true'],
       ['mw_token', data.token],
@@ -46,7 +54,6 @@ export function AuthProvider({ children }) {
       ['mw_name', data.fullName || data.email.split('@')[0]],
       ['mw_username', data.username || ''],
     ]);
-
     setUser({
       token: data.token,
       email: data.email,
@@ -56,8 +63,39 @@ export function AuthProvider({ children }) {
     });
   };
 
-  const register = async (fullName, username, email, password) => {
-    return registerRequest(fullName, username, email, password);
+  const login = async (email, password) => {
+    try {
+      const res = await loginRequest(email, password);
+      const data = res.data;
+      await persistSession(data);
+      return { ok: true };
+    } catch (err) {
+      if (err.response?.status === 403 && err.response?.data?.code === 'PHONE_NOT_VERIFIED') {
+        return {
+          ok: false,
+          needPhoneVerification: true,
+          email: err.response.data.email || email,
+        };
+      }
+      throw err;
+    }
+  };
+
+  const register = async (fullName, username, email, password, phoneNumber) =>
+    registerRequest(fullName, username, email, password, phoneNumber);
+
+  const sendLoginOtp = async (email) => {
+    await sendAuthOtpRequest(undefined, email);
+  };
+
+  const verifyLoginOtp = async (email, code) => {
+    const res = await verifyAuthOtpRequest(undefined, email, code);
+    await persistSession(res.data);
+  };
+
+  const completeRegisterVerification = async (phoneNumber, email, code) => {
+    const res = await verifyAuthOtpRequest(phoneNumber, email, code);
+    await persistSession(res.data);
   };
 
   const logout = async () => {
@@ -65,7 +103,19 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  const value = useMemo(() => ({ user, loading, login, register, logout }), [user, loading]);
+  const value = useMemo(
+    () => ({
+      user,
+      loading,
+      login,
+      register,
+      sendLoginOtp,
+      verifyLoginOtp,
+      completeRegisterVerification,
+      logout,
+    }),
+    [user, loading]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

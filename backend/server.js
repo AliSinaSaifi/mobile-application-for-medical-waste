@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 require('dotenv').config();
+const { assertTwilioConfigured } = require('./config/twilioEnv');
+assertTwilioConfigured();
 
 const { connectPostgres, connectMongo, connectRedis } = require('./config/db');
 const { initSocket } = require('./services/Socket');
@@ -49,10 +51,6 @@ app.use(
 );
 app.use(express.json());
 
-if (isEnabled(process.env.ENABLE_POSTGRES, true)) connectPostgres();
-if (isEnabled(process.env.ENABLE_MONGO, true)) connectMongo();
-if (isEnabled(process.env.ENABLE_REDIS, true)) connectRedis();
-
 initSocket(server, { allowedOrigins });
 
 app.get('/', (req, res) => res.send('MedWaste API is running...'));
@@ -70,6 +68,24 @@ app.use('/api/profile', require('./routes/profile'));
 
 const PORT = Number(process.env.PORT) || 5000;
 const HOST = process.env.HOST || '0.0.0.0';
-server.listen(PORT, HOST, () => {
-  console.log(`🚀 Server listening on ${HOST}:${PORT}`);
+
+async function start() {
+  if (isEnabled(process.env.ENABLE_POSTGRES, true)) {
+    await connectPostgres();
+  }
+  if (isEnabled(process.env.ENABLE_MONGO, true)) {
+    await connectMongo();
+  }
+  if (isEnabled(process.env.ENABLE_REDIS, true)) {
+    await connectRedis();
+  }
+
+  server.listen(PORT, HOST, () => {
+    console.log(`🚀 Server listening on ${HOST}:${PORT}`);
+  });
+}
+
+start().catch((err) => {
+  console.error('❌ Server failed to start:', err);
+  process.exit(1);
 });

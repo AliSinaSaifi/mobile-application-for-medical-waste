@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const { Op } = require('sequelize');
 const User = require('../models/pg/User');
 const { sequelize } = require('../config/db');
 const { authenticate } = require('../middleware/auth');
@@ -7,13 +8,26 @@ const {
   validateProfilePayload,
   validatePasswordPayload,
   validatePhoneNumber,
-  generateVerificationCode,
-  hashVerificationCode,
   verifyCurrentPassword,
   hashPassword,
 } = require('../services/profile');
+const { sendSms } = require('../services/smsService');
+const { generateOtpCode, buildFieldsForNewOtp, evaluateOtpVerification } = require('../services/otpService');
 
 router.use(authenticate);
+
+function otpSmsBody(code) {
+  return `Your MedWaste verification code is ${code}. It expires in 5 minutes. Do not share this code.`;
+}
+
+function mapOtpErrorToResponse(res, err) {
+  if (err && err.status && [400, 429].includes(Number(err.status))) {
+    const body = { error: err.message };
+    if (err.retryAfterSec != null) body.retryAfterSec = err.retryAfterSec;
+    return res.status(err.status).json(body);
+  }
+  return null;
+}
 
 // GET /api/profile
 router.get('/', async (req, res) => {
@@ -37,7 +51,7 @@ router.get('/', async (req, res) => {
 
     return res.json(buildProfileDto(user));
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Request could not be completed' });
   }
 });
 
@@ -56,7 +70,6 @@ router.patch('/', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Check username uniqueness (case-insensitive)
     if (username && username.trim()) {
       const existing = await User.findOne({
         where: sequelize.where(sequelize.fn('lower', sequelize.col('username')), username.trim().toLowerCase()),
@@ -72,13 +85,15 @@ router.patch('/', async (req, res) => {
       department: typeof department === 'string' ? department.trim() : '',
     });
 
+    await user.reload();
+
     return res.json({
       ok: true,
       message: 'Profile updated successfully',
       profile: buildProfileDto(user),
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Request could not be completed' });
   }
 });
 
@@ -107,7 +122,7 @@ router.patch('/password', async (req, res) => {
 
     return res.json({ ok: true, message: 'Password changed successfully' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Request could not be completed' });
   }
 });
 
@@ -126,32 +141,42 @@ router.post('/phone/send-code', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const code = generateVerificationCode();
-    const ttlMinutes = Number(process.env.PHONE_VERIFICATION_TTL_MINUTES || 10);
-    const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
-
-    await user.update({
-      phoneNumber: phoneNumber.trim(),
-      phoneVerified: false,
-      phoneVerificationCodeHash: hashVerificationCode(code),
-      phoneVerificationExpiresAt: expiresAt,
+    const phoneTrim = phoneNumber.trim();
+    const taken = await User.findOne({
+      where: { phoneNumber: phoneTrim, id: { [Op.ne]: user.id } },
     });
-
-    // Placeholder delivery hook while real SMS provider is not configured.
-    console.log(`📱 Phone verification code for user ${user.id}: ${code}`);
-
-    const payload = {
-      ok: true,
-      message: 'Verification code sent',
-    };
-
-    if (String(process.env.PHONE_VERIFICATION_DEBUG || '').toLowerCase() === 'true') {
-      payload.debugCode = code;
+    if (taken) {
+      return res.status(400).json({ error: 'This phone number is already in use' });
     }
 
-    return res.json(payload);
+    const plainOtp = generateOtpCode();
+    const otpFields = await buildFieldsForNewOtp(user, plainOtp);
+
+    try {
+      await sendSms(phoneTrim, otpSmsBody(plainOtp));
+    } catch (sendErr) {
+      const mapped = mapOtpErrorToResponse(res, sendErr);
+      if (mapped) return mapped;
+      return res.status(503).json({ error: 'Unable to send verification SMS. Try again later.' });
+    }
+
+    await user.update({
+      phoneNumber: phoneTrim,
+      phoneVerified: false,
+      ...otpFields,
+    });
+
+    return res.json({
+      ok: true,
+      message: 'Verification code sent',
+    });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    const mapped = mapOtpErrorToResponse(res, err);
+    if (mapped) return mapped;
+    if (err.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ error: 'This phone number is already in use' });
+    }
+    return res.status(500).json({ error: 'Request could not be completed' });
   }
 });
 
@@ -160,37 +185,30 @@ router.post('/phone/verify', async (req, res) => {
   try {
     const { code } = req.body;
 
-    if (!code || typeof code !== 'string' || !/^\d{6}$/.test(code.trim())) {
-      return res.status(400).json({ error: 'Verification code must be 6 digits' });
-    }
-
     const user = await User.findByPk(req.user.userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (!user.phoneVerificationCodeHash || !user.phoneVerificationExpiresAt) {
-      return res.status(400).json({ error: 'No verification request found. Send code first.' });
+    const result = await evaluateOtpVerification(user, code);
+    await user.update(result.patch);
+
+    if (result.patch.otpLockedUntil) {
+      return res.status(429).json({
+        error: 'Too many failed attempts. Try again later.',
+        retryAfterSec: Math.ceil((new Date(result.patch.otpLockedUntil) - Date.now()) / 1000),
+      });
     }
 
-    if (new Date(user.phoneVerificationExpiresAt) < new Date()) {
-      return res.status(400).json({ error: 'Verification code expired. Send a new code.' });
+    if (!result.matches) {
+      return res.status(401).json({ error: 'Invalid verification code' });
     }
-
-    const matches = hashVerificationCode(code.trim()) === user.phoneVerificationCodeHash;
-    if (!matches) {
-      return res.status(400).json({ error: 'Invalid verification code' });
-    }
-
-    await user.update({
-      phoneVerified: true,
-      phoneVerificationCodeHash: null,
-      phoneVerificationExpiresAt: null,
-    });
 
     return res.json({ ok: true, message: 'Phone verified successfully' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    const mapped = mapOtpErrorToResponse(res, err);
+    if (mapped) return mapped;
+    return res.status(500).json({ error: 'Request could not be completed' });
   }
 });
 

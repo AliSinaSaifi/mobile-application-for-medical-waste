@@ -1,25 +1,57 @@
-const router  = require('express').Router();
-const bcrypt  = require('bcryptjs');
-const jwt     = require('jsonwebtoken');
-const User    = require('../models/pg/User');
+const router = require('express').Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/pg/User');
 const { sequelize } = require('../config/db');
 const { saveSession, deleteSession } = require('../services/redis');
 const { authenticate } = require('../middleware/auth');
-const { validateProfilePayload } = require('../services/profile');
-const { generateVerificationCode, hashVerificationCode } = require('../services/profile');
+const { validateProfilePayload, validatePhoneNumber } = require('../services/profile');
 const { sendSms } = require('../services/smsService');
+const {
+  generateOtpCode,
+  buildFieldsForNewOtp,
+  evaluateOtpVerification,
+} = require('../services/otpService');
 
 const SECRET = process.env.JWT_SECRET || 'supersecretkey';
 const REDIS_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.ENABLE_REDIS ?? 'true').toLowerCase());
+
+function mapOtpErrorToResponse(res, err) {
+  if (err && err.status && [400, 429].includes(Number(err.status))) {
+    const body = { error: err.message };
+    if (err.retryAfterSec != null) body.retryAfterSec = err.retryAfterSec;
+    return res.status(err.status).json(body);
+  }
+  return null;
+}
+
+function otpSmsBody(code) {
+  return `Your MedWaste verification code is ${code}. It expires in 5 minutes. Do not share this code.`;
+}
+
+/** When E2E_INCLUDE_TWILIO_SID=1, attach Twilio metadata for integration tests only (never the OTP). */
+function withOptionalTwilioMeta(body, twilioResult) {
+  if (process.env.E2E_INCLUDE_TWILIO_SID !== '1' || !twilioResult?.sid) return body;
+  return {
+    ...body,
+    twilioMessageSid: twilioResult.sid,
+    twilioMessageStatus: twilioResult.status ?? null,
+  };
+}
 
 // ── POST /api/auth/register ───────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
     const { fullName, username, email, phoneNumber, password, role } = req.body;
 
-    if (!email || !password || !username || !fullName) {
-      return res.status(400).json({ error: 'Full name, username, email and password are required' });
+    if (!email || !password || !username || !fullName || !phoneNumber) {
+      return res.status(400).json({
+        error: 'Full name, username, email, phone number (E.164), and password are required',
+      });
     }
+
+    const phoneErr = validatePhoneNumber(phoneNumber);
+    if (phoneErr) return res.status(400).json({ error: phoneErr });
 
     const validationError = validateProfilePayload({ fullName, username, department: '' });
     if (validationError) return res.status(400).json({ error: validationError });
@@ -27,41 +59,70 @@ router.post('/register', async (req, res) => {
     const existingEmail = await User.findOne({ where: { email } });
     if (existingEmail) return res.status(400).json({ error: 'User with this email already exists' });
 
-    const existingUser = await User.findOne({ where: sequelize.where(sequelize.fn('lower', sequelize.col('username')), username.trim().toLowerCase()) });
+    const existingUser = await User.findOne({
+      where: sequelize.where(sequelize.fn('lower', sequelize.col('username')), username.trim().toLowerCase()),
+    });
     if (existingUser) return res.status(400).json({ error: 'Username is already taken' });
+
+    const phoneTrim = phoneNumber.trim();
+    const existingPhone = await User.findOne({ where: { phoneNumber: phoneTrim } });
+    if (existingPhone) return res.status(400).json({ error: 'This phone number is already registered' });
 
     const hashed = await bcrypt.hash(password, 10);
 
-    // Only allow safe roles on self-register
-    const safeRole = ['admin', 'personnel', 'driver', 'utilizer'].includes(role)
-      ? role
-      : 'personnel'; // default role
+    const safeRole = ['admin', 'personnel', 'driver', 'utilizer'].includes(role) ? role : 'personnel';
+
+    const plainOtp = generateOtpCode();
+    const otpFields = await buildFieldsForNewOtp(
+      {
+        otpResendCount: 0,
+        otpResendWindowStartedAt: null,
+        otpLockedUntil: null,
+      },
+      plainOtp
+    );
 
     const newUser = await User.create({
       fullName: fullName.trim(),
       username: username.trim(),
       email,
-      phoneNumber: phoneNumber ? phoneNumber.trim() : null,
+      phoneNumber: phoneTrim,
       password: hashed,
       role: safeRole,
       phoneVerified: false,
+      ...otpFields,
     });
 
-    // If phone provided, generate OTP and send SMS
-    if (phoneNumber) {
-      const code = generateVerificationCode();
-      const hash = hashVerificationCode(code);
-      const ttlMinutes = Number(process.env.PHONE_VERIFICATION_TTL_MINUTES || 5);
-      const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
-      await newUser.update({ phoneVerificationCodeHash: hash, phoneVerificationExpiresAt: expiresAt });
-      const smsRes = await sendSms(phoneNumber.trim(), `Your MedWaste verification code is ${code}`);
-      if (!smsRes.ok) console.warn('SMS send failed:', smsRes.error);
-      return res.status(201).json({ ok: true, message: 'User created. OTP sent to phone.' });
+    let twilioResult;
+    try {
+      twilioResult = await sendSms(phoneTrim, otpSmsBody(plainOtp));
+    } catch (sendErr) {
+      await newUser.destroy();
+      const mapped = mapOtpErrorToResponse(res, sendErr);
+      if (mapped) return mapped;
+      return res.status(503).json({ error: 'Unable to send verification SMS. Try again later.' });
     }
 
-    return res.status(201).json({ ok: true, message: 'User created' });
+    return res.status(201).json(
+      withOptionalTwilioMeta(
+        {
+          ok: true,
+          message: 'Account created. Enter the verification code sent to your phone.',
+        },
+        twilioResult
+      )
+    );
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (err.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ error: 'This phone number is already registered' });
+    }
+    const mapped = mapOtpErrorToResponse(res, err);
+    if (mapped) return mapped;
+    if (process.env.AUTH_VERBOSE_ERRORS === '1') {
+      // eslint-disable-next-line no-console
+      console.error('[auth/register]', err);
+    }
+    return res.status(500).json({ error: 'Registration could not be completed' });
   }
 });
 
@@ -76,18 +137,32 @@ router.post('/send-otp', async (req, res) => {
       : await User.findOne({ where: { email } });
 
     if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.phoneNumber) {
+      return res.status(400).json({ error: 'No phone number on file for this account' });
+    }
 
-    const code = generateVerificationCode();
-    const hash = hashVerificationCode(code);
-    const ttlMinutes = Number(process.env.PHONE_VERIFICATION_TTL_MINUTES || 5);
-    const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
-    await user.update({ phoneVerificationCodeHash: hash, phoneVerificationExpiresAt: expiresAt, phoneVerified: false });
+    const plainOtp = generateOtpCode();
+    const otpFields = await buildFieldsForNewOtp(user, plainOtp);
 
-    const smsRes = await sendSms(user.phoneNumber, `Your MedWaste verification code is ${code}`);
-    if (!smsRes.ok) return res.status(500).json({ error: 'Failed to send SMS' });
-    return res.json({ ok: true, message: 'OTP sent' });
+    let twilioResult;
+    try {
+      twilioResult = await sendSms(user.phoneNumber, otpSmsBody(plainOtp));
+    } catch (sendErr) {
+      const mapped = mapOtpErrorToResponse(res, sendErr);
+      if (mapped) return mapped;
+      return res.status(503).json({ error: 'Unable to send verification SMS. Try again later.' });
+    }
+
+    await user.update({
+      ...otpFields,
+      phoneVerified: false,
+    });
+
+    return res.json(withOptionalTwilioMeta({ ok: true, message: 'OTP sent' }, twilioResult));
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    const mapped = mapOtpErrorToResponse(res, err);
+    if (mapped) return mapped;
+    return res.status(500).json({ error: 'Could not send OTP' });
   }
 });
 
@@ -95,31 +170,57 @@ router.post('/send-otp', async (req, res) => {
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, phoneNumber, code } = req.body;
-    if (!code || (!email && !phoneNumber)) return res.status(400).json({ error: 'code and email/phoneNumber are required' });
+    if (!code || (!email && !phoneNumber)) {
+      return res.status(400).json({ error: 'code and email or phoneNumber are required' });
+    }
 
     const user = phoneNumber
       ? await User.findOne({ where: { phoneNumber: phoneNumber.trim() } })
       : await User.findOne({ where: { email } });
 
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (!user.phoneVerificationCodeHash || !user.phoneVerificationExpiresAt) return res.status(400).json({ error: 'No OTP requested' });
-    if (new Date(user.phoneVerificationExpiresAt) < new Date()) return res.status(400).json({ error: 'OTP expired' });
 
-    const matches = hashVerificationCode(code.trim()) === user.phoneVerificationCodeHash;
-    if (!matches) return res.status(400).json({ error: 'Invalid OTP' });
+    const result = await evaluateOtpVerification(user, code);
+    await user.update(result.patch);
 
-    await user.update({ phoneVerified: true, phoneVerificationCodeHash: null, phoneVerificationExpiresAt: null });
+    if (result.patch.otpLockedUntil) {
+      return res.status(429).json({
+        error: 'Too many failed attempts. Try again later.',
+        retryAfterSec: Math.ceil((new Date(result.patch.otpLockedUntil) - Date.now()) / 1000),
+      });
+    }
 
-    // sign JWT and return so frontend can log in immediately
-    const token = require('jsonwebtoken').sign(
+    if (!result.matches) {
+      return res.status(401).json({ error: 'Invalid OTP' });
+    }
+
+    const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role, fullName: user.fullName, username: user.username },
-      process.env.JWT_SECRET || 'supersecretkey',
+      SECRET,
       { expiresIn: '7d' }
     );
 
-    return res.json({ ok: true, message: 'Phone verified', token, email: user.email, fullName: user.fullName, username: user.username, role: user.role });
+    if (REDIS_ENABLED) {
+      try {
+        await saveSession(user.id, token);
+      } catch {
+        // session persistence is best-effort
+      }
+    }
+
+    return res.json({
+      ok: true,
+      message: 'Phone verified',
+      token,
+      email: user.email,
+      fullName: user.fullName,
+      username: user.username,
+      role: user.role,
+    });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    const mapped = mapOtpErrorToResponse(res, err);
+    if (mapped) return mapped;
+    return res.status(500).json({ error: 'Verification could not be completed' });
   }
 });
 
@@ -133,17 +234,20 @@ router.post('/login', async (req, res) => {
     }
 
     const user = await User.findOne({ where: { email } });
-    if (!user)         return res.status(400).json({ error: 'User not found' });
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     if (!user.password) return res.status(400).json({ error: 'Password not set. Contact admin.' });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
-    // Block login if phone not verified
+    if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
+
     if (!user.phoneVerified) {
-      return res.status(403).json({ error: 'Phone not verified', phoneNotVerified: true });
+      return res.status(403).json({
+        error: 'Phone verification required before login.',
+        code: 'PHONE_NOT_VERIFIED',
+        email: user.email,
+      });
     }
 
-    // Sign JWT with role
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role, fullName: user.fullName, username: user.username },
       SECRET,
@@ -153,20 +257,20 @@ router.post('/login', async (req, res) => {
     if (REDIS_ENABLED) {
       try {
         await saveSession(user.id, token);
-      } catch (redisErr) {
-        console.warn('⚠️ Redis session save skipped:', redisErr.message);
+      } catch {
+        // best-effort
       }
     }
 
     res.json({
       token,
-      email:    user.email,
+      email: user.email,
       fullName: user.fullName,
       username: user.username,
-      role:     user.role,
+      role: user.role,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Login could not be completed' });
   }
 });
 
@@ -176,13 +280,13 @@ router.post('/logout', authenticate, async (req, res) => {
     if (REDIS_ENABLED) {
       try {
         await deleteSession(req.user.userId);
-      } catch (redisErr) {
-        console.warn('⚠️ Redis session delete skipped:', redisErr.message);
+      } catch {
+        // best-effort
       }
     }
     res.json({ ok: true, message: 'Logged out' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Logout could not be completed' });
   }
 });
 
@@ -206,7 +310,7 @@ router.get('/me', authenticate, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Request could not be completed' });
   }
 });
 

@@ -1,4 +1,3 @@
-const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
 const DEPARTMENTS = new Set([
@@ -74,14 +73,6 @@ function validatePhoneNumber(phoneNumber) {
   return null;
 }
 
-function generateVerificationCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-function hashVerificationCode(code) {
-  return crypto.createHash('sha256').update(code).digest('hex');
-}
-
 function buildProfileDto(user) {
   return {
     username: user.username || (user.email ? user.email.split('@')[0] : 'user'),
@@ -113,8 +104,6 @@ module.exports = {
   validateProfilePayload,
   validatePasswordPayload,
   validatePhoneNumber,
-  generateVerificationCode,
-  hashVerificationCode,
   verifyCurrentPassword,
   hashPassword,
 };
