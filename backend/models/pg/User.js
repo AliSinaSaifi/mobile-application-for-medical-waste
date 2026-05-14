@@ -45,42 +45,6 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(20),
     allowNull: true,
   },
-  /** Same semantics as isPhoneVerified in requirements */
-  phoneVerified: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: false,
-  },
-  otpHash: {
-    type: DataTypes.STRING(255),
-    allowNull: true,
-  },
-  otpExpiresAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  otpAttempts: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0,
-  },
-  otpResendCount: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0,
-  },
-  otpLastSentAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  otpResendWindowStartedAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  otpLockedUntil: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
   plateNumber: { type: DataTypes.STRING(20), allowNull: true },
   vehicleModel: { type: DataTypes.STRING(100), allowNull: true },
   lastLat: { type: DataTypes.DOUBLE, allowNull: true },

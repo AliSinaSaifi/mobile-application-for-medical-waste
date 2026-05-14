@@ -95,49 +95,6 @@ async function ensureUserProfileColumns() {
     type: Sequelize.STRING(20),
     allowNull: true,
   });
-
-  await addIfMissing('phoneVerified', {
-    type: Sequelize.BOOLEAN,
-    allowNull: false,
-    defaultValue: false,
-  });
-
-  await addIfMissing('otpHash', {
-    type: Sequelize.STRING(255),
-    allowNull: true,
-  });
-
-  await addIfMissing('otpExpiresAt', {
-    type: Sequelize.DATE,
-    allowNull: true,
-  });
-
-  await addIfMissing('otpAttempts', {
-    type: Sequelize.INTEGER,
-    allowNull: false,
-    defaultValue: 0,
-  });
-
-  await addIfMissing('otpResendCount', {
-    type: Sequelize.INTEGER,
-    allowNull: false,
-    defaultValue: 0,
-  });
-
-  await addIfMissing('otpLastSentAt', {
-    type: Sequelize.DATE,
-    allowNull: true,
-  });
-
-  await addIfMissing('otpResendWindowStartedAt', {
-    type: Sequelize.DATE,
-    allowNull: true,
-  });
-
-  await addIfMissing('otpLockedUntil', {
-    type: Sequelize.DATE,
-    allowNull: true,
-  });
 }
 
 async function connectPostgres() {

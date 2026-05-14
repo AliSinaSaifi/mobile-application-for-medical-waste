@@ -2,7 +2,7 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const { createCorsOriginCallback } = require('../config/cors');
 
-const SECRET = process.env.JWT_SECRET || 'supersecretkey';
+const SECRET = process.env.JWT_SECRET;
 
 let io;
 

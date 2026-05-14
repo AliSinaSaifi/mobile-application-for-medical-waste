@@ -79,10 +79,7 @@ function buildProfileDto(user) {
     fullName: user.fullName || '',
     email: user.email,
     department: user.department || '',
-    phone: {
-      number: user.phoneNumber || '',
-      verified: Boolean(user.phoneVerified),
-    },
+    phoneNumber: user.phoneNumber || '',
     role: user.role,
     status: 'Active',
   };

@@ -3,8 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   loginRequest,
   registerRequest,
-  sendAuthOtpRequest,
-  verifyAuthOtpRequest,
 } from '../services/api';
 
 const AuthContext = createContext(null);
@@ -64,39 +62,14 @@ export function AuthProvider({ children }) {
   };
 
   const login = async (email, password) => {
-    try {
-      const res = await loginRequest(email, password);
-      const data = res.data;
-      await persistSession(data);
-      return { ok: true };
-    } catch (err) {
-      if (err.response?.status === 403 && err.response?.data?.code === 'PHONE_NOT_VERIFIED') {
-        return {
-          ok: false,
-          needPhoneVerification: true,
-          email: err.response.data.email || email,
-        };
-      }
-      throw err;
-    }
+    const res = await loginRequest(email, password);
+    const data = res.data;
+    await persistSession(data);
+    return { ok: true };
   };
 
-  const register = async (fullName, username, email, password, phoneNumber) =>
-    registerRequest(fullName, username, email, password, phoneNumber);
-
-  const sendLoginOtp = async (email) => {
-    await sendAuthOtpRequest(undefined, email);
-  };
-
-  const verifyLoginOtp = async (email, code) => {
-    const res = await verifyAuthOtpRequest(undefined, email, code);
-    await persistSession(res.data);
-  };
-
-  const completeRegisterVerification = async (phoneNumber, email, code) => {
-    const res = await verifyAuthOtpRequest(phoneNumber, email, code);
-    await persistSession(res.data);
-  };
+  const register = async (fullName, username, email, password) =>
+    registerRequest(fullName, username, email, password);
 
   const logout = async () => {
     await AsyncStorage.multiRemove(['mw_logged_in', 'mw_token', 'mw_user', 'mw_role', 'mw_name', 'mw_username']);
@@ -109,9 +82,6 @@ export function AuthProvider({ children }) {
       loading,
       login,
       register,
-      sendLoginOtp,
-      verifyLoginOtp,
-      completeRegisterVerification,
       logout,
     }),
     [user, loading]

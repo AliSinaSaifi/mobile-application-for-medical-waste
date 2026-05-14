@@ -2,8 +2,8 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 require('dotenv').config();
-const { assertTwilioConfigured } = require('./config/twilioEnv');
-assertTwilioConfigured();
+const { assertJwtConfigured } = require('./config/jwtEnv');
+assertJwtConfigured();
 
 const { connectPostgres, connectMongo, connectRedis } = require('./config/db');
 const { initSocket } = require('./services/Socket');

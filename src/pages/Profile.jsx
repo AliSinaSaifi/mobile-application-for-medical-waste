@@ -1,10 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   changePassword,
   getProfile,
-  sendPhoneCode,
   updateProfile,
-  verifyPhoneCode,
 } from "../services/api";
 
 const css = `
@@ -204,14 +202,12 @@ function Profile() {
     email,
     department: "",
     role: sessionStorage.getItem("mw_role") || "user",
+    phoneNumber: "",
   });
   const [security, setSecurity] = useState({ current: "", newPw: "", confirm: "" });
-  const [phone, setPhone] = useState({ number: "", code: "", sent: false, verified: false });
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
-  const [sendingCode, setSendingCode] = useState(false);
-  const [verifyingCode, setVerifyingCode] = useState(false);
   const [toast, setToast] = useState("");
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
@@ -234,15 +230,8 @@ function Profile() {
           email: data.email || email,
           department: data.department || "",
           role: data.role || sessionStorage.getItem("mw_role") || "user",
+          phoneNumber: data.phoneNumber || "",
         });
-
-        setPhone((prev) => ({
-          ...prev,
-          number: data.phone?.number || "",
-          verified: Boolean(data.phone?.verified),
-          sent: false,
-          code: "",
-        }));
 
         sessionStorage.setItem("mw_name", nextFullName || nextUsername);
         sessionStorage.setItem("mw_username", nextUsername);
@@ -306,32 +295,7 @@ function Profile() {
     }
   };
 
-  const handleSendCode = async () => {
-    try {
-      setSendingCode(true);
-      await sendPhoneCode(phone.number);
-      setPhone((p) => ({ ...p, sent: true, verified: false }));
-      showToast("📱 Verification code sent");
-    } catch (err) {
-      showToast(`✕ ${err.response?.data?.error || "Failed to send code"}`);
-    } finally {
-      setSendingCode(false);
-    }
-  };
-
-  const handleVerify = async () => {
-    try {
-      setVerifyingCode(true);
-      await verifyPhoneCode(phone.code);
-      setPhone((p) => ({ ...p, verified: true, sent: false, code: "" }));
-      showToast("✓ Phone verified!");
-    } catch (err) {
-      showToast(`✕ ${err.response?.data?.error || "Failed to verify phone"}`);
-    } finally {
-      setVerifyingCode(false);
-    }
-  };
-
+  
   const strength      = pwStrength(security.newPw);
   const strengthLabel = ["", "Weak", "Fair", "Good", "Strong"][strength];
   const strengthColor = ["", "fill-weak", "fill-medium", "fill-medium", "fill-strong"][strength];
@@ -345,7 +309,7 @@ function Profile() {
           {/* PAGE HEADER */}
           <div className="pf-page-header">
             <h1>My Profile</h1>
-            <p>Update your personal information and verify your phone number</p>
+            <p>Update your personal information</p>
           </div>
 
           {/* AVATAR CARD */}
@@ -360,9 +324,6 @@ function Profile() {
                     {profile.username && (
                       <span className="pf-badge pf-badge-ghost">@{profile.username}</span>
                     )}
-                    <span className={`pf-badge ${phone.verified ? "pf-badge-green" : "pf-badge-orange"}`}>
-                      {phone.verified ? "✓ Phone verified" : "⚠ Phone unverified"}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -370,7 +331,7 @@ function Profile() {
               <div className="pf-stats-row">
                 {[
                   { label: "Email",      val: profile.email || email },
-                  { label: "Phone",      val: phone.number || "—" },
+                  { label: "Phone",      val: profile.phoneNumber || "—" },
                   { label: "Department", val: profile.department || "—" },
                   { label: "Status",     val: "Active" },
                 ].map((s) => (
@@ -423,11 +384,13 @@ function Profile() {
                   <div className="pf-field pf-profile-row">
                     <label>Phone</label>
                     <input
-                      type="text"
-                      value={phone.number || "Not set"}
-                      readOnly
-                      style={{ background: "#f0f4f8", cursor: "not-allowed", color: "#5e6a85" }}
+                      type="tel"
+                      placeholder="+1234567890"
+                      value={profile.phoneNumber || ""}
+                      disabled={loadingProfile || savingProfile}
+                      onChange={e => setProfile(p => ({ ...p, phoneNumber: e.target.value }))}
                     />
+                    <span className="pf-field-hint">Your phone number (any format)</span>
                   </div>
                   <div className="pf-field pf-profile-row">
                     <label>Role</label>
@@ -523,52 +486,6 @@ function Profile() {
             </div>
           </div>
 
-          {/* PHONE VERIFICATION */}
-          <div className="pf-card">
-            <div className="pf-card-head">
-              <div className="pf-card-icon">📱</div>
-              <div>
-                <div className="pf-card-title">Phone & Verification</div>
-                <div className="pf-card-sub">Required for SMS / WhatsApp notifications</div>
-              </div>
-            </div>
-            <div className="pf-card-body">
-              <div className={`pf-phone-status ${phone.verified ? "pf-phone-verified" : "pf-phone-unverified"}`}>
-                {phone.verified ? "✓ Phone number verified" : "⚠ Not verified"}
-              </div>
-
-              <div className="pf-phone-row">
-                <div className="pf-field">
-                  <label>Phone Number</label>
-                  <input type="tel" placeholder="+77051234567"
-                    value={phone.number}
-                    disabled={sendingCode || verifyingCode}
-                    onChange={e => setPhone(p => ({ ...p, number: e.target.value, sent: false, verified: false }))} />
-                  <span className="pf-field-hint">E.164 format, e.g. +77051234567</span>
-                </div>
-                <button type="button" className="pf-btn pf-btn-ghost pf-phone-action" onClick={handleSendCode}
-                  disabled={sendingCode || verifyingCode || !phone.number.trim()}>
-                   {sendingCode ? "Sending..." : " Send Code"}
-                </button>
-              </div>
-
-              {phone.sent && !phone.verified && (
-                <div className="pf-phone-row" style={{ marginTop: 8 }}>
-                  <div className="pf-field">
-                    <label>Verification Code</label>
-                    <input type="text" placeholder="Enter code from SMS"
-                      value={phone.code}
-                      disabled={verifyingCode}
-                      onChange={e => setPhone(p => ({ ...p, code: e.target.value }))} />
-                  </div>
-                  <button type="button" className="pf-btn pf-btn-green pf-phone-action" onClick={handleVerify}
-                    disabled={verifyingCode || !phone.code.trim()}>
-                    {verifyingCode ? "Verifying..." : "✓ Verify Phone"}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
 
         </div>
       </div>

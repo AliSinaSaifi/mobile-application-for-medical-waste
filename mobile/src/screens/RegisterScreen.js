@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -11,32 +11,17 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { sendAuthOtpRequest } from '../services/api';
-
-const RESEND_COOLDOWN_SEC = 60;
 
 export default function RegisterScreen({ navigation }) {
-  const { register, completeRegisterVerification } = useAuth();
+  const { register } = useAuth();
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [otp, setOtp] = useState('');
-  const [step, setStep] = useState('form');
   const [loading, setLoading] = useState(false);
-  const [verifyLoading, setVerifyLoading] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
-
-  useEffect(() => {
-    if (resendCooldown <= 0) return undefined;
-    const t = setInterval(() => setResendCooldown((c) => c - 1), 1000);
-    return () => clearInterval(t);
-  }, [resendCooldown]);
 
   const onSubmitForm = async () => {
     setError('');
@@ -59,42 +44,13 @@ export default function RegisterScreen({ navigation }) {
 
     setLoading(true);
     try {
-      await register(fullName.trim(), username.trim(), email.trim(), password, phoneNumber.trim());
-      setStep('verify');
-      setResendCooldown(RESEND_COOLDOWN_SEC);
-      setSuccess('Enter the code sent to your phone.');
+      await register(fullName.trim(), username.trim(), email.trim(), password);
+      setSuccess('Account created. You can log in now.');
+      setTimeout(() => navigation.replace('Login'), 800);
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const onVerify = async () => {
-    setError('');
-    setVerifyLoading(true);
-    try {
-      await completeRegisterVerification(phoneNumber.trim(), email.trim(), otp);
-      navigation.replace('Home');
-    } catch (err) {
-      setError(err.response?.data?.error || 'Verification failed.');
-    } finally {
-      setVerifyLoading(false);
-    }
-  };
-
-  const onResend = async () => {
-    if (resendCooldown > 0 || resendLoading) return;
-    setError('');
-    setResendLoading(true);
-    try {
-      await sendAuthOtpRequest(phoneNumber.trim(), email.trim());
-      setSuccess('A new code was sent.');
-      setResendCooldown(RESEND_COOLDOWN_SEC);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to resend.');
-    } finally {
-      setResendLoading(false);
     }
   };
 
@@ -104,110 +60,56 @@ export default function RegisterScreen({ navigation }) {
         <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>Register a new MedWaste account</Text>
 
-        {step === 'form' && (
-          <>
-            <TextInput
-              style={styles.input}
-              placeholder="Full Name"
-              placeholderTextColor="#94A3B8"
-              value={fullName}
-              onChangeText={setFullName}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Phone (E.164, e.g. +77051234567)"
-              placeholderTextColor="#94A3B8"
-              keyboardType="phone-pad"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor="#94A3B8"
-              autoCapitalize="none"
-              value={username}
-              onChangeText={setUsername}
-            />
+        <TextInput
+          style={styles.input}
+          placeholder="Full Name"
+          placeholderTextColor="#94A3B8"
+          value={fullName}
+          onChangeText={setFullName}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Username"
+          placeholderTextColor="#94A3B8"
+          autoCapitalize="none"
+          value={username}
+          onChangeText={setUsername}
+        />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#94A3B8"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          placeholderTextColor="#94A3B8"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
+        />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#94A3B8"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm Password"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
-          </>
-        )}
-
-        {step === 'verify' && (
-          <>
-            <Text style={styles.hint}>Enter the 6-digit code sent to {phoneNumber}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="000000"
-              placeholderTextColor="#94A3B8"
-              keyboardType="number-pad"
-              maxLength={6}
-              value={otp}
-              onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))}
-            />
-          </>
-        )}
+        <TextInput
+          style={styles.input}
+          placeholder="Confirm Password"
+          placeholderTextColor="#94A3B8"
+          secureTextEntry
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+        />
 
         {!!error && <Text style={styles.error}>{error}</Text>}
         {!!success && <Text style={styles.success}>{success}</Text>}
 
-        {step === 'form' && (
-          <Pressable style={styles.button} onPress={onSubmitForm} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Create Account</Text>}
-          </Pressable>
-        )}
-
-        {step === 'verify' && (
-          <>
-            <Pressable style={styles.button} onPress={onVerify} disabled={verifyLoading || otp.length !== 6}>
-              {verifyLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Verify & continue</Text>
-              )}
-            </Pressable>
-            <Pressable
-              style={[styles.button, styles.buttonGhost]}
-              onPress={onResend}
-              disabled={resendCooldown > 0 || resendLoading}
-            >
-              {resendLoading ? (
-                <ActivityIndicator color="#60A5FA" />
-              ) : (
-                <Text style={styles.buttonGhostText}>
-                  {resendCooldown > 0 ? `Resend (${resendCooldown}s)` : 'Resend code'}
-                </Text>
-              )}
-            </Pressable>
-          </>
-        )}
+        <Pressable style={styles.button} onPress={onSubmitForm} disabled={loading}>
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Create Account</Text>}
+        </Pressable>
 
         <View style={styles.row}>
           <Text style={styles.muted}>Already have an account?</Text>
