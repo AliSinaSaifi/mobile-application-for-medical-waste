@@ -65,6 +65,7 @@ const css = `
   .pf-badge-blue   { background: #eff5ff; color: #1A6EFF; }
   .pf-badge-orange { background: #fff7e6; color: #D97706; }
   .pf-badge-green  { background: #e6faf3; color: #00A870; }
+  .pf-badge-ghost  { background: #eef2f7; color: #46556f; }
 
   /* STATS ROW */
   .pf-stats-row {
@@ -94,6 +95,7 @@ const css = `
     padding: 10px 14px; border: 1.5px solid #e4e9f0; border-radius: 8px;
     font-family: inherit; font-size: 0.9rem; color: #1a2035;
     background: #f8fafc; outline: none;
+    width: 100%; min-width: 0; box-sizing: border-box;
     transition: border-color .2s, background .2s, box-shadow .2s;
   }
   .pf-field input:focus,
@@ -103,6 +105,17 @@ const css = `
   }
   .pf-field input::placeholder { color: #a0aec0; }
   .pf-field-hint { font-size: 0.72rem; color: #a0aec0; margin-top: 2px; }
+
+  /* PROFILE INFORMATION STACK */
+  .pf-profile-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .pf-profile-row {
+    width: 100%;
+  }
 
   /* BUTTONS */
   .pf-btn {
@@ -138,8 +151,14 @@ const css = `
   }
   .pf-phone-unverified { background: #fff7e6; color: #D97706; border: 1px solid #fde68a; }
   .pf-phone-verified   { background: #e6faf3; color: #00A870; border: 1px solid #6ee7b7; }
-  .pf-phone-row { display: flex; gap: 10px; align-items: flex-end; }
-  .pf-phone-row .pf-field { flex: 1; margin-bottom: 0; }
+  .pf-phone-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: end;
+  }
+  .pf-phone-row .pf-field { margin-bottom: 0; }
+  .pf-phone-action { margin-bottom: 22px; }
 
   /* SUCCESS TOAST */
   .pf-toast {
@@ -158,6 +177,10 @@ const css = `
     .pf-grid-2 { grid-template-columns: 1fr; }
     .pf-col-2  { grid-column: span 1; }
     .pf-stats-row { grid-template-columns: repeat(2,1fr); }
+    .pf-avatar-row { flex-direction: column; align-items: flex-start; }
+    .pf-btn-row .pf-btn { width: 100%; justify-content: center; }
+    .pf-phone-row { grid-template-columns: 1fr; align-items: stretch; }
+    .pf-phone-action { width: 100%; margin-bottom: 0; }
   }
 `;
 
@@ -371,8 +394,8 @@ function Profile() {
             </div>
             <div className="pf-card-body">
               <form onSubmit={handleProfileSave}>
-                <div className="pf-grid-2">
-                  <div className="pf-field">
+                <div className="pf-profile-stack">
+                  <div className="pf-field pf-profile-row">
                     <label>Full Name</label>
                     <input
                       type="text" placeholder="John Smith"
@@ -382,7 +405,7 @@ function Profile() {
                     />
                     <span className="pf-field-hint">Your display name (spaces allowed)</span>
                   </div>
-                  <div className="pf-field">
+                  <div className="pf-field pf-profile-row">
                     <label>Username</label>
                     <input
                       type="text" placeholder="your_username"
@@ -392,12 +415,30 @@ function Profile() {
                     />
                     <span className="pf-field-hint">3–30 characters: letters, numbers, underscores, hyphens</span>
                   </div>
-                  <div className="pf-field">
+                  <div className="pf-field pf-profile-row">
                     <label>Email</label>
                     <input type="email" value={profile.email} readOnly
                       style={{ background: "#f0f4f8", cursor: "not-allowed", color: "#5e6a85" }} />
                   </div>
-                  <div className="pf-field pf-col-2">
+                  <div className="pf-field pf-profile-row">
+                    <label>Phone</label>
+                    <input
+                      type="text"
+                      value={phone.number || "Not set"}
+                      readOnly
+                      style={{ background: "#f0f4f8", cursor: "not-allowed", color: "#5e6a85" }}
+                    />
+                  </div>
+                  <div className="pf-field pf-profile-row">
+                    <label>Role</label>
+                    <input
+                      type="text"
+                      value={profile.role || "user"}
+                      readOnly
+                      style={{ background: "#f0f4f8", cursor: "not-allowed", color: "#5e6a85", textTransform: "capitalize" }}
+                    />
+                  </div>
+                  <div className="pf-field pf-profile-row">
                     <label>Department</label>
                     <select
                       value={profile.department}
@@ -505,9 +546,8 @@ function Profile() {
                     onChange={e => setPhone(p => ({ ...p, number: e.target.value, sent: false, verified: false }))} />
                   <span className="pf-field-hint">E.164 format, e.g. +77051234567</span>
                 </div>
-                <button type="button" className="pf-btn pf-btn-ghost" onClick={handleSendCode}
-                  disabled={sendingCode || verifyingCode || !phone.number.trim()}
-                  style={{ marginBottom: 22 }}>
+                <button type="button" className="pf-btn pf-btn-ghost pf-phone-action" onClick={handleSendCode}
+                  disabled={sendingCode || verifyingCode || !phone.number.trim()}>
                    {sendingCode ? "Sending..." : " Send Code"}
                 </button>
               </div>
@@ -521,9 +561,8 @@ function Profile() {
                       disabled={verifyingCode}
                       onChange={e => setPhone(p => ({ ...p, code: e.target.value }))} />
                   </div>
-                  <button type="button" className="pf-btn pf-btn-green" onClick={handleVerify}
-                    disabled={verifyingCode || !phone.code.trim()}
-                    style={{ marginBottom: 22 }}>
+                  <button type="button" className="pf-btn pf-btn-green pf-phone-action" onClick={handleVerify}
+                    disabled={verifyingCode || !phone.code.trim()}>
                     {verifyingCode ? "Verifying..." : "✓ Verify Phone"}
                   </button>
                 </div>
