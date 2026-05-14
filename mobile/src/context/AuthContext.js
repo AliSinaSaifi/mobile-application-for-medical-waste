@@ -11,11 +11,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const restore = async () => {
       try {
-        const [token, email, role, fullName] = await AsyncStorage.multiGet([
+        const [token, email, role, fullName, username] = await AsyncStorage.multiGet([
           'mw_token',
           'mw_user',
           'mw_role',
           'mw_name',
+          'mw_username',
         ]);
         const tokenVal = token[1];
         const emailVal = email[1];
@@ -23,7 +24,7 @@ export function AuthProvider({ children }) {
         const nameVal = fullName[1];
 
         if (tokenVal && emailVal) {
-          setUser({ token: tokenVal, email: emailVal, role: roleVal, fullName: nameVal });
+          setUser({ token: tokenVal, email: emailVal, role: roleVal, fullName: nameVal, username: username[1] });
         }
       } finally {
         setLoading(false);
@@ -43,6 +44,7 @@ export function AuthProvider({ children }) {
       ['mw_user', data.email],
       ['mw_role', data.role || 'personnel'],
       ['mw_name', data.fullName || data.email.split('@')[0]],
+      ['mw_username', data.username || ''],
     ]);
 
     setUser({
@@ -50,15 +52,16 @@ export function AuthProvider({ children }) {
       email: data.email,
       role: data.role,
       fullName: data.fullName,
+      username: data.username,
     });
   };
 
-  const register = async (fullName, email, password) => {
-    return registerRequest(fullName, email, password);
+  const register = async (fullName, username, email, password) => {
+    return registerRequest(fullName, username, email, password);
   };
 
   const logout = async () => {
-    await AsyncStorage.multiRemove(['mw_logged_in', 'mw_token', 'mw_user', 'mw_role', 'mw_name']);
+    await AsyncStorage.multiRemove(['mw_logged_in', 'mw_token', 'mw_user', 'mw_role', 'mw_name', 'mw_username']);
     setUser(null);
   };
 

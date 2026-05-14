@@ -16,13 +16,14 @@ const Login = () => {
 
     try {
       const res = await login(email, password);
-      const { token, email: userEmail, role, fullName } = res.data;
+      const { token, email: userEmail, role, fullName, username } = res.data;
 
       sessionStorage.setItem("mw_logged_in", "true");
       sessionStorage.setItem("mw_user",      userEmail);
       sessionStorage.setItem("mw_token",     token);
       sessionStorage.setItem("mw_role",      role);
       sessionStorage.setItem("mw_name",      fullName || userEmail.split("@")[0]);
+      if (username) sessionStorage.setItem("mw_username", username);
 
       // Redirect based on role
       const routes = {

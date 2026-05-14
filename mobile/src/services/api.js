@@ -16,7 +16,7 @@ api.interceptors.request.use(async (config) => {
 export const loginRequest = (email, password) =>
   api.post('/api/auth/login', { email, password });
 
-export const registerRequest = (fullName, email, password) =>
-  api.post('/api/auth/register', { fullName, email, password });
+export const registerRequest = (fullName, username, email, password) =>
+  api.post('/api/auth/register', { fullName, username, email, password });
 
 export default api;

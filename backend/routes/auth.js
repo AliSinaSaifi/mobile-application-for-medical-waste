@@ -2,8 +2,10 @@ const router  = require('express').Router();
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const User    = require('../models/pg/User');
+const { sequelize } = require('../config/db');
 const { saveSession, deleteSession } = require('../services/redis');
 const { authenticate } = require('../middleware/auth');
+const { validateProfilePayload } = require('../services/profile');
 
 const SECRET = process.env.JWT_SECRET || 'supersecretkey';
 const REDIS_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.ENABLE_REDIS ?? 'true').toLowerCase());
@@ -11,14 +13,20 @@ const REDIS_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.ENA
 // ── POST /api/auth/register ───────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { fullName, email, password, role } = req.body;
+    const { fullName, username, email, password, role } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    if (!email || !password || !username || !fullName) {
+      return res.status(400).json({ error: 'Full name, username, email and password are required' });
     }
 
-    const existing = await User.findOne({ where: { email } });
-    if (existing) return res.status(400).json({ error: 'User already exists' });
+    const validationError = validateProfilePayload({ fullName, username, department: '' });
+    if (validationError) return res.status(400).json({ error: validationError });
+
+    const existingEmail = await User.findOne({ where: { email } });
+    if (existingEmail) return res.status(400).json({ error: 'User with this email already exists' });
+
+    const existingUser = await User.findOne({ where: sequelize.where(sequelize.fn('lower', sequelize.col('username')), username.trim().toLowerCase()) });
+    if (existingUser) return res.status(400).json({ error: 'Username is already taken' });
 
     const hashed = await bcrypt.hash(password, 10);
 
@@ -28,7 +36,8 @@ router.post('/register', async (req, res) => {
       : 'personnel'; // default role
 
     const newUser = await User.create({
-      fullName: fullName || email.split('@')[0],
+      fullName: fullName.trim(),
+      username: username.trim(),
       email,
       password: hashed,
       role: safeRole,
@@ -58,7 +67,7 @@ router.post('/login', async (req, res) => {
 
     // Sign JWT with role
     const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role, fullName: user.fullName },
+      { userId: user.id, email: user.email, role: user.role, fullName: user.fullName, username: user.username },
       SECRET,
       { expiresIn: '7d' }
     );
@@ -75,6 +84,7 @@ router.post('/login', async (req, res) => {
       token,
       email:    user.email,
       fullName: user.fullName,
+      username: user.username,
       role:     user.role,
     });
   } catch (err) {
@@ -102,7 +112,18 @@ router.post('/logout', authenticate, async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   try {
     const user = await User.findByPk(req.user.userId, {
-      attributes: ['id', 'email', 'fullName', 'role', 'isAvailable', 'createdAt'],
+      attributes: [
+        'id',
+        'email',
+        'fullName',
+        'username',
+        'role',
+        'isAvailable',
+        'department',
+        'phoneNumber',
+        'phoneVerified',
+        'createdAt',
+      ],
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);

@@ -1,4 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import {
+  changePassword,
+  getProfile,
+  sendPhoneCode,
+  updateProfile,
+  verifyPhoneCode,
+} from "../services/api";
 
 const css = `
   
@@ -165,26 +172,142 @@ function pwStrength(pw) {
 }
 
 function Profile() {
-  const email    = sessionStorage.getItem("mw_user") || "user@example.com";
-  const username = email.split("@")[0];
+  const email = sessionStorage.getItem("mw_user") || "user@example.com";
+  const fallbackUsername = (sessionStorage.getItem("mw_name") || email.split("@")[0] || "user").trim();
 
-  const [profile, setProfile] = useState({ username, email, department: "" });
+  const [profile, setProfile] = useState({
+    username: fallbackUsername,
+    fullName: sessionStorage.getItem("mw_name") || '',
+    email,
+    department: "",
+    role: sessionStorage.getItem("mw_role") || "user",
+  });
   const [security, setSecurity] = useState({ current: "", newPw: "", confirm: "" });
-  const [phone, setPhone]     = useState({ number: "+77055022271", code: "", sent: false, verified: false });
-  const [toast, setToast]     = useState("");
+  const [phone, setPhone] = useState({ number: "", code: "", sent: false, verified: false });
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [toast, setToast] = useState("");
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
-  const handleProfileSave = (e) => { e.preventDefault(); showToast("✓ Profile updated successfully"); };
-  const handlePasswordSave = (e) => {
+  useEffect(() => {
+    let mounted = true;
+
+    const loadProfile = async () => {
+      try {
+        setLoadingProfile(true);
+        const { data } = await getProfile();
+        if (!mounted) return;
+
+        const nextUsername = (data.username || fallbackUsername).trim();
+        const nextFullName = (data.fullName || sessionStorage.getItem('mw_name') || '').trim();
+
+        setProfile({
+          username: nextUsername,
+          fullName: nextFullName,
+          email: data.email || email,
+          department: data.department || "",
+          role: data.role || sessionStorage.getItem("mw_role") || "user",
+        });
+
+        setPhone((prev) => ({
+          ...prev,
+          number: data.phone?.number || "",
+          verified: Boolean(data.phone?.verified),
+          sent: false,
+          code: "",
+        }));
+
+        sessionStorage.setItem("mw_name", nextFullName || nextUsername);
+        sessionStorage.setItem("mw_username", nextUsername);
+      } catch (err) {
+        if (mounted) {
+          showToast(`✕ ${err.response?.data?.error || "Failed to load profile"}`);
+        }
+      } finally {
+        if (mounted) setLoadingProfile(false);
+      }
+    };
+
+    loadProfile();
+    return () => { mounted = false; };
+  }, []);
+
+  const handleProfileSave = async (e) => {
+    e.preventDefault();
+
+    try {
+      setSavingProfile(true);
+      const { data } = await updateProfile({
+        fullName: profile.fullName,
+        username: profile.username,
+        department: profile.department,
+      });
+
+      const updatedUsername = (data.profile?.username || profile.username).trim();
+      const updatedFullName = (data.profile?.fullName || profile.fullName).trim();
+      setProfile((p) => ({
+        ...p,
+        username: updatedUsername,
+        fullName: updatedFullName,
+        department: data.profile?.department || "",
+      }));
+      sessionStorage.setItem("mw_name", updatedFullName || updatedUsername);
+      sessionStorage.setItem("mw_username", updatedUsername);
+
+      showToast("✓ Profile updated successfully");
+    } catch (err) {
+      showToast(`✕ ${err.response?.data?.error || "Failed to update profile"}`);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handlePasswordSave = async (e) => {
     e.preventDefault();
     if (security.newPw !== security.confirm) { showToast("✕ Passwords do not match"); return; }
     if (security.newPw.length < 8) { showToast("✕ Password must be at least 8 characters"); return; }
-    showToast("✓ Password changed successfully");
-    setSecurity({ current: "", newPw: "", confirm: "" });
+
+    try {
+      setSavingPassword(true);
+      await changePassword(security.current, security.newPw, security.confirm);
+      showToast("✓ Password changed successfully");
+      setSecurity({ current: "", newPw: "", confirm: "" });
+    } catch (err) {
+      showToast(`✕ ${err.response?.data?.error || "Failed to change password"}`);
+    } finally {
+      setSavingPassword(false);
+    }
   };
-  const handleSendCode = () => { setPhone(p => ({ ...p, sent: true })); showToast("📱 Verification code sent"); };
-  const handleVerify   = () => { setPhone(p => ({ ...p, verified: true })); showToast("✓ Phone verified!"); };
+
+  const handleSendCode = async () => {
+    try {
+      setSendingCode(true);
+      await sendPhoneCode(phone.number);
+      setPhone((p) => ({ ...p, sent: true, verified: false }));
+      showToast("📱 Verification code sent");
+    } catch (err) {
+      showToast(`✕ ${err.response?.data?.error || "Failed to send code"}`);
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    try {
+      setVerifyingCode(true);
+      await verifyPhoneCode(phone.code);
+      setPhone((p) => ({ ...p, verified: true, sent: false, code: "" }));
+      showToast("✓ Phone verified!");
+    } catch (err) {
+      showToast(`✕ ${err.response?.data?.error || "Failed to verify phone"}`);
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
 
   const strength      = pwStrength(security.newPw);
   const strengthLabel = ["", "Weak", "Fair", "Good", "Strong"][strength];
@@ -206,11 +329,14 @@ function Profile() {
           <div className="pf-card">
             <div className="pf-card-body">
               <div className="pf-avatar-row">
-                <div className="pf-avatar">{username.charAt(0).toUpperCase()}</div>
+                <div className="pf-avatar">{(profile.fullName || profile.username || fallbackUsername).charAt(0).toUpperCase()}</div>
                 <div className="pf-avatar-info">
-                  <h2>{username}</h2>
+                  <h2>{profile.fullName || profile.username || fallbackUsername}</h2>
                   <div className="pf-avatar-badges">
-                    <span className="pf-badge pf-badge-blue">Role: user</span>
+                    <span className="pf-badge pf-badge-blue">Role: {profile.role || "user"}</span>
+                    {profile.username && (
+                      <span className="pf-badge pf-badge-ghost">@{profile.username}</span>
+                    )}
                     <span className={`pf-badge ${phone.verified ? "pf-badge-green" : "pf-badge-orange"}`}>
                       {phone.verified ? "✓ Phone verified" : "⚠ Phone unverified"}
                     </span>
@@ -220,7 +346,7 @@ function Profile() {
 
               <div className="pf-stats-row">
                 {[
-                  { label: "Email",      val: email },
+                  { label: "Email",      val: profile.email || email },
                   { label: "Phone",      val: phone.number || "—" },
                   { label: "Department", val: profile.department || "—" },
                   { label: "Status",     val: "Active" },
@@ -247,10 +373,21 @@ function Profile() {
               <form onSubmit={handleProfileSave}>
                 <div className="pf-grid-2">
                   <div className="pf-field">
+                    <label>Full Name</label>
+                    <input
+                      type="text" placeholder="John Smith"
+                      value={profile.fullName}
+                      disabled={loadingProfile || savingProfile}
+                      onChange={e => setProfile(p => ({ ...p, fullName: e.target.value }))}
+                    />
+                    <span className="pf-field-hint">Your display name (spaces allowed)</span>
+                  </div>
+                  <div className="pf-field">
                     <label>Username</label>
                     <input
                       type="text" placeholder="your_username"
                       value={profile.username}
+                      disabled={loadingProfile || savingProfile}
                       onChange={e => setProfile(p => ({ ...p, username: e.target.value }))}
                     />
                     <span className="pf-field-hint">3–30 characters: letters, numbers, underscores, hyphens</span>
@@ -262,7 +399,11 @@ function Profile() {
                   </div>
                   <div className="pf-field pf-col-2">
                     <label>Department</label>
-                    <select value={profile.department} onChange={e => setProfile(p => ({ ...p, department: e.target.value }))}>
+                    <select
+                      value={profile.department}
+                      disabled={loadingProfile || savingProfile}
+                      onChange={e => setProfile(p => ({ ...p, department: e.target.value }))}
+                    >
                       <option value="">Select department</option>
                       <option value="surgery">Surgery Department</option>
                       <option value="therapy">Therapy Department</option>
@@ -275,7 +416,9 @@ function Profile() {
                   </div>
                 </div>
                 <div className="pf-btn-row">
-                  <button type="submit" className="pf-btn pf-btn-primary"> Save Changes</button>
+                  <button type="submit" className="pf-btn pf-btn-primary" disabled={loadingProfile || savingProfile}>
+                    {savingProfile ? "Saving..." : " Save Changes"}
+                  </button>
                 </div>
               </form>
             </div>
@@ -297,12 +440,14 @@ function Profile() {
                     <label>Current Password</label>
                     <input type="password" placeholder="••••••••"
                       value={security.current}
+                      disabled={savingPassword}
                       onChange={e => setSecurity(s => ({ ...s, current: e.target.value }))} />
                   </div>
                   <div className="pf-field">
                     <label>New Password</label>
                     <input type="password" placeholder="••••••••"
                       value={security.newPw}
+                      disabled={savingPassword}
                       onChange={e => setSecurity(s => ({ ...s, newPw: e.target.value }))} />
                     {security.newPw && (
                       <div className="pf-pw-strength">
@@ -319,6 +464,7 @@ function Profile() {
                     <label>Confirm New Password</label>
                     <input type="password" placeholder="••••••••"
                       value={security.confirm}
+                      disabled={savingPassword}
                       onChange={e => setSecurity(s => ({ ...s, confirm: e.target.value }))}
                       style={security.confirm && security.confirm !== security.newPw
                         ? { borderColor: "#EF4444" } : {}} />
@@ -328,7 +474,9 @@ function Profile() {
                   </div>
                 </div>
                 <div className="pf-btn-row">
-                  <button type="submit" className="pf-btn pf-btn-primary"> Change Password</button>
+                  <button type="submit" className="pf-btn pf-btn-primary" disabled={savingPassword}>
+                    {savingPassword ? "Saving..." : " Change Password"}
+                  </button>
                 </div>
               </form>
             </div>
@@ -353,12 +501,14 @@ function Profile() {
                   <label>Phone Number</label>
                   <input type="tel" placeholder="+77051234567"
                     value={phone.number}
+                    disabled={sendingCode || verifyingCode}
                     onChange={e => setPhone(p => ({ ...p, number: e.target.value, sent: false, verified: false }))} />
                   <span className="pf-field-hint">E.164 format, e.g. +77051234567</span>
                 </div>
                 <button type="button" className="pf-btn pf-btn-ghost" onClick={handleSendCode}
+                  disabled={sendingCode || verifyingCode || !phone.number.trim()}
                   style={{ marginBottom: 22 }}>
-                   Send Code
+                   {sendingCode ? "Sending..." : " Send Code"}
                 </button>
               </div>
 
@@ -368,11 +518,13 @@ function Profile() {
                     <label>Verification Code</label>
                     <input type="text" placeholder="Enter code from SMS"
                       value={phone.code}
+                      disabled={verifyingCode}
                       onChange={e => setPhone(p => ({ ...p, code: e.target.value }))} />
                   </div>
                   <button type="button" className="pf-btn pf-btn-green" onClick={handleVerify}
+                    disabled={verifyingCode || !phone.code.trim()}
                     style={{ marginBottom: 22 }}>
-                    ✓ Verify Phone
+                    {verifyingCode ? "Verifying..." : "✓ Verify Phone"}
                   </button>
                 </div>
               )}

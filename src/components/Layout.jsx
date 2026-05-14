@@ -16,6 +16,7 @@ const Layout = () => {
         if (newRole !== oldRole) {
           sessionStorage.setItem("mw_role", newRole);
           sessionStorage.setItem("mw_name", res.data.fullName || res.data.email);
+          if (res.data.username) sessionStorage.setItem('mw_username', res.data.username);
 
           const routes = {
             admin:     "/dashboard/admin/dispatch",

@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 export default function RegisterScreen({ navigation }) {
   const { register } = useAuth();
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -38,7 +39,12 @@ export default function RegisterScreen({ navigation }) {
 
     setLoading(true);
     try {
-      await register(fullName.trim(), email.trim(), password);
+      if (!/^[A-Za-z0-9_-]{3,30}$/.test(username)) {
+        setError('Username must be 3-30 characters and only contain letters, numbers, underscores, or hyphens.');
+        setLoading(false);
+        return;
+      }
+      await register(fullName.trim(), username.trim(), email.trim(), password);
       setSuccess('Registered successfully. Redirecting to login...');
       setTimeout(() => navigation.replace('Login'), 1200);
     } catch (err) {
@@ -60,6 +66,14 @@ export default function RegisterScreen({ navigation }) {
           placeholderTextColor="#94A3B8"
           value={fullName}
           onChangeText={setFullName}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Username"
+          placeholderTextColor="#94A3B8"
+          autoCapitalize="none"
+          value={username}
+          onChangeText={setUsername}
         />
 
         <TextInput

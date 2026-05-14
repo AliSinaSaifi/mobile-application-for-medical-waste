@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { register } from "../../services/api";
 
 const Register = () => {
-  const [form, setForm]       = useState({ fullName: "", email: "", password: "", confirmPassword: "" });
+  const [form, setForm]       = useState({ fullName: "", username: "", email: "", password: "", confirmPassword: "" });
   const [error, setError]     = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,10 +16,11 @@ const Register = () => {
 
     if (form.password !== form.confirmPassword) return setError("Passwords do not match.");
     if (form.password.length < 6) return setError("Password must be at least 6 characters.");
+    if (!/^[A-Za-z0-9_-]{3,30}$/.test(form.username)) return setError('Username must be 3-30 chars and only letters, numbers, underscores, or hyphens.');
 
     setLoading(true);
     try {
-      await register(form.fullName, form.email, form.password);
+      await register(form.fullName, form.username, form.email, form.password);
       setSuccess("Registered successfully. Redirecting to login...");
       setTimeout(() => navigate("/login"), 1200);
     } catch (err) {
@@ -44,6 +45,11 @@ const Register = () => {
             <label>Full Name</label>
             <input type="text" placeholder="Dr. Jane Smith" required
               value={form.fullName} onChange={set("fullName")} />
+          </div>
+          <div className="form-group">
+            <label>Username</label>
+            <input type="text" placeholder="your_username" required
+              value={form.username} onChange={set("username")} />
           </div>
           <div className="form-group">
             <label>Email</label>
