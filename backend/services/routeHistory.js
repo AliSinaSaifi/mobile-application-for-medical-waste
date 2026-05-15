@@ -18,6 +18,11 @@ const STATUS_MAP = {
 
 const VALID_STATUSES = new Set(['all', 'active', 'completed', 'cancelled']);
 const SORT_FIELDS = new Set(['assignedAt', 'completedAt', 'distance', 'bins', 'status', 'name']);
+const ROUTE_POINT_MAX_PER_ROUTE = Number(process.env.ROUTE_POINT_MAX_PER_ROUTE) || 10000;
+const GPS_MIN_INTERVAL_MS = Number(process.env.GPS_MIN_INTERVAL_MS) || 3000;
+const GPS_MAX_FUTURE_SKEW_MS = Number(process.env.GPS_MAX_FUTURE_SKEW_MS) || 2 * 60 * 1000;
+const GPS_MAX_PAST_SKEW_MS = Number(process.env.GPS_MAX_PAST_SKEW_MS) || 24 * 60 * 60 * 1000;
+const ingestRateBuckets = new Map();
 
 function clampNumber(value, min, max, fallback) {
   const parsed = Number(value);
@@ -114,6 +119,48 @@ function validateOptionalNumber(value, { min, max, name }) {
     throw err;
   }
   return parsed;
+}
+
+function enforceIngestRateLimit(key) {
+  const now = Date.now();
+  const bucket = ingestRateBuckets.get(key) || [];
+  const recent = bucket.filter((time) => now - time < 10000);
+  if (recent.length >= 8) {
+    ingestRateBuckets.set(key, recent);
+    const err = new Error('Too many GPS updates');
+    err.status = 429;
+    throw err;
+  }
+  recent.push(now);
+  ingestRateBuckets.set(key, recent);
+
+  if (ingestRateBuckets.size > 5000) {
+    for (const [bucketKey, values] of ingestRateBuckets.entries()) {
+      if (!values.some((time) => now - time < 10000)) ingestRateBuckets.delete(bucketKey);
+    }
+  }
+}
+
+async function pruneOldRoutePoints(routeId) {
+  if (!ROUTE_POINT_MAX_PER_ROUTE || ROUTE_POINT_MAX_PER_ROUTE < 1000) return;
+
+  const extra = await RoutePoint.countDocuments({
+    $or: [{ taskId: routeId }, { routeId }],
+  }) - ROUTE_POINT_MAX_PER_ROUTE;
+
+  if (extra <= 0) return;
+
+  const oldPoints = await RoutePoint.find({
+    $or: [{ taskId: routeId }, { routeId }],
+  })
+    .sort({ timestamp: 1 })
+    .limit(extra)
+    .select('_id')
+    .lean();
+
+  if (oldPoints.length) {
+    await RoutePoint.deleteMany({ _id: { $in: oldPoints.map((point) => point._id) } });
+  }
 }
 
 function haversineKm(a, b) {
@@ -374,10 +421,17 @@ async function addRoutePoint(taskId, body, user) {
     err.status = 400;
     throw err;
   }
+  enforceIngestRateLimit(`${user.userId}:${id}`);
 
   const timestamp = body.timestamp ? new Date(body.timestamp) : new Date();
   if (Number.isNaN(timestamp.getTime())) {
     const err = new Error('Invalid timestamp');
+    err.status = 400;
+    throw err;
+  }
+  const now = Date.now();
+  if (timestamp.getTime() - now > GPS_MAX_FUTURE_SKEW_MS || now - timestamp.getTime() > GPS_MAX_PAST_SKEW_MS) {
+    const err = new Error('GPS timestamp is outside the accepted time window');
     err.status = 400;
     throw err;
   }
@@ -415,7 +469,7 @@ async function addRoutePoint(taskId, body, user) {
       err.status = 400;
       throw err;
     }
-    if (deltaMs < 3000) {
+    if (deltaMs < GPS_MIN_INTERVAL_MS) {
       const err = new Error('GPS updates are too frequent');
       err.status = 429;
       throw err;
@@ -438,6 +492,7 @@ async function addRoutePoint(taskId, body, user) {
     source: body.source || 'gps',
     timestamp,
   });
+  await pruneOldRoutePoints(id);
 
   const routePath = await routeCoordinates(task, null, null, 1000);
   const payload = {

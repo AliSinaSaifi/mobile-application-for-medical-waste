@@ -8,9 +8,11 @@ const TRACKING_STATE_KEY = 'mw_tracking_state';
 const QUEUE_KEY = 'mw_tracking_queue';
 const LAST_POINT_KEY = 'mw_tracking_last_point';
 const MIN_DISTANCE_METERS = 10;
+const MAX_QUEUE_SIZE = 500;
 
 let foregroundSubscription = null;
 let activeRouteId = null;
+let flushingQueue = false;
 
 function distanceMeters(a, b) {
   if (!a || !b) return Infinity;
@@ -42,6 +44,7 @@ async function readJson(key, fallback) {
   try {
     return JSON.parse(raw);
   } catch {
+    await AsyncStorage.removeItem(key);
     return fallback;
   }
 }
@@ -49,7 +52,18 @@ async function readJson(key, fallback) {
 async function enqueue(point) {
   const queue = await readJson(QUEUE_KEY, []);
   queue.push(point);
-  await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue.slice(-500)));
+  await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue.slice(-MAX_QUEUE_SIZE)));
+}
+
+async function stopForExpiredAuth() {
+  await AsyncStorage.multiRemove([TRACKING_STATE_KEY, LAST_POINT_KEY, QUEUE_KEY]);
+  activeRouteId = null;
+  if (foregroundSubscription) {
+    foregroundSubscription.remove();
+    foregroundSubscription = null;
+  }
+  const started = await Location.hasStartedLocationUpdatesAsync(TASK_NAME);
+  if (started) await Location.stopLocationUpdatesAsync(TASK_NAME);
 }
 
 async function uploadPoint(point) {
@@ -61,21 +75,31 @@ async function uploadPoint(point) {
   const state = await readJson(TRACKING_STATE_KEY, null);
   if (!state?.routeId || !state?.token) return false;
 
-  const res = await fetch(`${API_BASE_URL}/api/route-history/${state.routeId}/points`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${state.token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(point),
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE_URL}/api/route-history/${state.routeId}/points`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${state.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(point),
+    });
+  } catch {
+    return false;
+  }
 
   if ([200, 201, 409].includes(res.status)) {
     await AsyncStorage.setItem(LAST_POINT_KEY, JSON.stringify(point));
     return true;
   }
 
-  if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 404) {
+  if (res.status === 401 || res.status === 403) {
+    await stopForExpiredAuth();
+    return true;
+  }
+
+  if (res.status === 400 || res.status === 404) {
     return true;
   }
 
@@ -83,15 +107,24 @@ async function uploadPoint(point) {
 }
 
 export async function flushTrackingQueue() {
+  if (flushingQueue) return;
+  flushingQueue = true;
   const queue = await readJson(QUEUE_KEY, []);
-  if (!queue.length) return;
+  if (!Array.isArray(queue) || !queue.length) {
+    flushingQueue = false;
+    return;
+  }
 
   const remaining = [];
-  for (const point of queue) {
-    const ok = await uploadPoint(point);
-    if (!ok) remaining.push(point);
+  try {
+    for (const point of queue) {
+      const ok = await uploadPoint(point);
+      if (!ok) remaining.push(point);
+    }
+    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(remaining.slice(-MAX_QUEUE_SIZE)));
+  } finally {
+    flushingQueue = false;
   }
-  await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(remaining.slice(-500)));
 }
 
 async function handleLocation(location) {
@@ -108,9 +141,9 @@ async function handleLocation(location) {
     source: 'mobile',
   };
 
+  await flushTrackingQueue();
   const ok = await uploadPoint(point);
   if (!ok) await enqueue(point);
-  await flushTrackingQueue();
 }
 
 TaskManager.defineTask(TASK_NAME, async ({ data, error }) => {
@@ -124,6 +157,7 @@ export async function startDriverTracking({ routeId, token }) {
   const normalizedRouteId = Number(routeId);
   if (!Number.isInteger(normalizedRouteId) || normalizedRouteId <= 0 || !token) return false;
   if (activeRouteId === normalizedRouteId) return true;
+  const previousRouteId = activeRouteId;
 
   const foreground = await Location.requestForegroundPermissionsAsync();
   if (foreground.status !== 'granted') return false;
@@ -137,6 +171,9 @@ export async function startDriverTracking({ routeId, token }) {
     startedAt: new Date().toISOString(),
   }));
   activeRouteId = normalizedRouteId;
+  if (previousRouteId && previousRouteId !== normalizedRouteId) {
+    await AsyncStorage.multiRemove([LAST_POINT_KEY, QUEUE_KEY]);
+  }
 
   const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(TASK_NAME);
   if (!alreadyStarted) {
@@ -180,7 +217,7 @@ export async function stopDriverTracking() {
   const started = await Location.hasStartedLocationUpdatesAsync(TASK_NAME);
   if (started) await Location.stopLocationUpdatesAsync(TASK_NAME);
 
-  await AsyncStorage.multiRemove([TRACKING_STATE_KEY, LAST_POINT_KEY]);
+  await AsyncStorage.multiRemove([TRACKING_STATE_KEY, LAST_POINT_KEY, QUEUE_KEY]);
 }
 
 export async function restoreDriverTracking() {

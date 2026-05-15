@@ -66,7 +66,10 @@ export default function App() {
       }
 
       checkTracking();
-      window.setInterval(checkTracking, 10000);
+      var intervalId = window.setInterval(checkTracking, 10000);
+      window.addEventListener('pagehide', function () {
+        window.clearInterval(intervalId);
+      });
     })();
     true;
   `, []);

@@ -25,6 +25,21 @@ const defaultKpis = {
   totalDistance: 0,
   containersCollected: 0,
 };
+const MAX_POLYLINE_POINTS = 1000;
+const MAX_MARKERS = 100;
+
+function samplePoints(points, maxPoints) {
+  if (!Array.isArray(points) || points.length <= maxPoints) return points || [];
+  if (maxPoints <= 2) return [points[0], points[points.length - 1]];
+
+  const sampled = [points[0]];
+  const step = (points.length - 2) / (maxPoints - 2);
+  for (let i = 1; i < maxPoints - 1; i += 1) {
+    sampled.push(points[Math.round(i * step)]);
+  }
+  sampled.push(points[points.length - 1]);
+  return sampled;
+}
 
 const css = `
   
@@ -210,6 +225,14 @@ function RouteHistory() {
   }, []);
 
   const selectedCoordinates = selectedRoute?.coordinates || [];
+  const polylineCoordinates = useMemo(
+    () => samplePoints(selectedCoordinates, MAX_POLYLINE_POINTS),
+    [selectedCoordinates]
+  );
+  const markerCoordinates = useMemo(
+    () => samplePoints(selectedCoordinates, MAX_MARKERS),
+    [selectedCoordinates]
+  );
   const mapCenter = selectedCoordinates[0] || [51.1283, 71.4305];
 
   useSocket({
@@ -259,8 +282,12 @@ function RouteHistory() {
     const socket = getSharedSocket();
     if (!socket || !selectedRoute?.id) return undefined;
 
-    socket.emit("route:subscribe", selectedRoute.id);
+    const subscribe = () => socket.emit("route:subscribe", selectedRoute.id);
+    subscribe();
+    socket.on("connect", subscribe);
+
     return () => {
+      socket.off("connect", subscribe);
       socket.emit("route:unsubscribe", selectedRoute.id);
     };
   }, [selectedRoute?.id]);
@@ -381,12 +408,12 @@ function RouteHistory() {
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
                   <Polyline
-                    positions={selectedCoordinates}
+                    positions={polylineCoordinates}
                     color="#1A6EFF"
                     weight={4}
                     opacity={0.8}
                   />
-                  {selectedCoordinates.map((point, i) => (
+                  {markerCoordinates.map((point, i) => (
                     <Marker key={i} position={point}>
                       <Popup>Stop {i + 1}</Popup>
                     </Marker>
