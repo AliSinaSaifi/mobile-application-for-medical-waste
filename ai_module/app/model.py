@@ -6,13 +6,13 @@ from typing import Any
 import joblib
 
 from .schemas import HistoryPoint
-from .trainer import TrainedModel, train_linear_regression
-from .utils import MODEL_DIR, MODEL_PATH, history_signature, logger, status_from_fullness
+from .trainer import MODEL_VERSION, TrainedModel, train_linear_regression
+from .utils import MODEL_DIR, MODEL_PATH, clamp_confidence, history_signature, logger, status_from_fullness
 
 
 class BinModelStore:
     def __init__(self) -> None:
-        self.registry: dict[str, Any] = {"version": 1, "bins": {}}
+        self.registry: dict[str, Any] = {"version": MODEL_VERSION, "bins": {}}
 
     def load(self) -> None:
         MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -22,12 +22,17 @@ class BinModelStore:
 
         try:
             self.registry = joblib.load(MODEL_PATH)
-            self.registry.setdefault("version", 1)
+            if self.registry.get("version") != MODEL_VERSION:
+                logger.info("Ignoring stale model registry version=%s", self.registry.get("version"))
+                self.registry = {"version": MODEL_VERSION, "bins": {}}
+                return
+
+            self.registry.setdefault("version", MODEL_VERSION)
             self.registry.setdefault("bins", {})
             logger.info("Loaded model registry from %s", MODEL_PATH)
         except Exception:
             logger.exception("Failed to load model registry; starting with empty registry")
-            self.registry = {"version": 1, "bins": {}}
+            self.registry = {"version": MODEL_VERSION, "bins": {}}
 
     def save(self) -> None:
         MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -40,11 +45,13 @@ class BinModelStore:
         signature = history_signature(history)
         cached = self.registry["bins"].get(bin_id)
         if cached and cached.get("signature") == signature:
-            return cached["trained"], None
+            trained = cached.get("trained")
+            if getattr(trained, "model_version", None) == MODEL_VERSION:
+                return trained, None
 
-        trained = train_linear_regression(history)
+        trained, train_note = train_linear_regression(history)
         if trained is None:
-            return None, "Trend is flat or insufficiently variable"
+            return None, train_note or "Trend is flat or insufficiently variable"
 
         self.registry["bins"][bin_id] = {
             "signature": signature,
@@ -61,7 +68,8 @@ def predict_time_to_full(trained: TrainedModel, history: list[HistoryPoint]) -> 
     latest_fullness = float(latest.fullness)
     status = status_from_fullness(latest_fullness)
 
-    if trained.slope_per_step <= 0:
+    slope_per_hour = float(getattr(trained, "slope_per_hour", 0.0))
+    if slope_per_hour <= 0:
         return {
             "predictedHoursToFull": None,
             "confidence": trained.confidence,
@@ -71,27 +79,23 @@ def predict_time_to_full(trained: TrainedModel, history: list[HistoryPoint]) -> 
         }
 
     remaining = max(0.0, 100.0 - latest_fullness)
-    steps_to_full = remaining / trained.slope_per_step
-
-    if len(ordered) >= 2:
-        deltas = [
-            (ordered[index].timestamp - ordered[index - 1].timestamp).total_seconds()
-            for index in range(1, len(ordered))
-        ]
-        positive_deltas = [delta for delta in deltas if delta > 0]
-        seconds_per_step = sum(positive_deltas) / len(positive_deltas) if positive_deltas else 3600.0
-    else:
-        seconds_per_step = 3600.0
-
-    seconds_to_full = max(0.0, steps_to_full * seconds_per_step)
+    hours_to_full = remaining / slope_per_hour
+    seconds_to_full = max(0.0, hours_to_full * 3600.0)
     estimated_full_time = latest.timestamp + timedelta(seconds=seconds_to_full)
+    observed_hours = max(float(getattr(trained, "observed_hours", 0.0)), 0.0)
+    horizon_quality = 1.0 if hours_to_full == 0 else (observed_hours * 2.0) / ((observed_hours * 2.0) + hours_to_full)
+    confidence = clamp_confidence(float(trained.confidence) * max(0.0, min(1.0, horizon_quality)))
+
+    note = getattr(trained, "fit_note", None)
+    if note is None and horizon_quality < 0.35:
+        note = "Low confidence: forecast horizon is much longer than the observed fill trend"
 
     return {
         "predictedHoursToFull": round(seconds_to_full / 3600.0, 2),
-        "confidence": trained.confidence,
+        "confidence": confidence,
         "status": status_from_fullness(100 if seconds_to_full == 0 else latest_fullness),
         "estimatedFullTime": estimated_full_time,
-        "note": None,
+        "note": note,
     }
 
 

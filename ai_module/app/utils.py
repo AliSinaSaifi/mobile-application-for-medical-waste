@@ -48,6 +48,6 @@ def status_from_fullness(fullness: float | None) -> str:
 def clamp_confidence(value: float) -> float:
     if value < 0:
         return 0.0
-    if value > 1:
-        return 1.0
-    return round(float(value), 4)
+    if value > 100:
+        return 100.0
+    return round(float(value), 2)

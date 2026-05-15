@@ -58,6 +58,24 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function blendTelemetryTail(docs, targetFullness, tailLength = 8) {
+  if (!docs.length) return;
+
+  const startIndex = Math.max(0, docs.length - tailLength);
+  const startFullness = Number(docs[startIndex].fullness);
+  const steps = Math.max(1, docs.length - startIndex - 1);
+
+  for (let index = startIndex; index < docs.length; index += 1) {
+    const ratio = (index - startIndex) / steps;
+    const noise = index === docs.length - 1 ? 0 : rand(-0.6, 0.6);
+    docs[index].fullness = Number(clamp(
+      startFullness + (targetFullness - startFullness) * ratio + noise,
+      4,
+      100
+    ).toFixed(1));
+  }
+}
+
 function addHours(date, hours) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
@@ -142,10 +160,9 @@ function generateTelemetryForContainer(container, index, config = readJson('tele
     docs.push({ binId: container.qrCode, fullness: Number(fullness.toFixed(1)), timestamp });
   }
 
-  const last = docs[docs.length - 1];
-  if (category >= 9) last.fullness = Number(rand(86, 97).toFixed(1));
-  if (category < 2) last.fullness = Number(rand(12, 36).toFixed(1));
-  if (category >= 5 && category < 9) last.fullness = Number(rand(68, 84).toFixed(1));
+  if (category >= 9) blendTelemetryTail(docs, rand(86, 97), 10);
+  if (category < 2) blendTelemetryTail(docs, rand(12, 36), 10);
+  if (category >= 5 && category < 9) blendTelemetryTail(docs, rand(68, 84), 10);
 
   return docs.sort((a, b) => a.timestamp - b.timestamp);
 }
