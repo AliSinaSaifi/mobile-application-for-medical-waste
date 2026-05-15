@@ -92,7 +92,16 @@ async function buildTaskWhere(query, user) {
 }
 
 function isValidCoordinate(lat, lon) {
-  return Number.isFinite(Number(lat)) && Number.isFinite(Number(lon));
+  const parsedLat = Number(lat);
+  const parsedLon = Number(lon);
+  return (
+    Number.isFinite(parsedLat) &&
+    Number.isFinite(parsedLon) &&
+    parsedLat >= -90 &&
+    parsedLat <= 90 &&
+    parsedLon >= -180 &&
+    parsedLon <= 180
+  );
 }
 
 function haversineKm(a, b) {

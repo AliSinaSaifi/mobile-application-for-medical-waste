@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -159,6 +159,7 @@ function RouteHistory() {
   const [kpis, setKpis]       = useState(defaultKpis);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
+  const mountedRef = useRef(false);
 
   const params = useMemo(() => ({ period, status }), [period, status]);
 
@@ -167,6 +168,7 @@ function RouteHistory() {
     setError("");
     try {
       const { data } = await getRouteHistory(params);
+      if (!mountedRef.current) return;
       const nextRoutes = data.routes || [];
       setRoutes(nextRoutes);
       setKpis(data.kpis || defaultKpis);
@@ -175,12 +177,13 @@ function RouteHistory() {
         return nextRoutes.find((route) => route.id === current.id) || nextRoutes[0] || null;
       });
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err.response?.data?.error || err.message || "Unable to load route history");
       setRoutes([]);
       setKpis(defaultKpis);
       setSelectedRoute(null);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   };
 
@@ -189,14 +192,20 @@ function RouteHistory() {
     setError("");
     try {
       const { data } = await getRouteHistoryDetail(route.id);
+      if (!mountedRef.current) return;
       setSelectedRoute(data);
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err.response?.data?.error || err.message || "Unable to load route details");
     }
   };
 
   useEffect(() => {
+    mountedRef.current = true;
     loadRoutes();
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const selectedCoordinates = selectedRoute?.coordinates || [];
