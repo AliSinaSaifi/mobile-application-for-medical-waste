@@ -35,10 +35,27 @@ function parseDateRange({ period, startDate, endDate } = {}) {
 
   if ((!start || Number.isNaN(start.getTime())) && period) {
     const trimmed = String(period).trim();
+    const normalized = trimmed.toLowerCase();
     const monthMatch = trimmed.match(/^([a-zA-Z]{3,9})\s+(\d{4})$/);
     const yearMatch = trimmed.match(/^(\d{4})$/);
 
-    if (monthMatch) {
+    if (normalized === 'day' || normalized === 'today') {
+      const now = new Date();
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end = now;
+    } else if (normalized === 'week' || normalized === 'weekly') {
+      end = new Date();
+      start = new Date(end);
+      start.setDate(end.getDate() - 7);
+    } else if (normalized === 'month' || normalized === 'monthly') {
+      end = new Date();
+      start = new Date(end);
+      start.setMonth(end.getMonth() - 1);
+    } else if (normalized === 'year' || normalized === 'yearly') {
+      end = new Date();
+      start = new Date(end);
+      start.setFullYear(end.getFullYear() - 1);
+    } else if (monthMatch) {
       const monthIndex = new Date(`${monthMatch[1]} 1, ${monthMatch[2]}`).getMonth();
       if (!Number.isNaN(monthIndex)) {
         start = new Date(Number(monthMatch[2]), monthIndex, 1);

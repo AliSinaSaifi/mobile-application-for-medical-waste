@@ -33,6 +33,42 @@ function serializeBin(container, latestReading) {
   };
 }
 
+function getPeriodDateRange(period) {
+  const normalized = String(period || '').trim().toLowerCase();
+  if (!normalized) return {};
+
+  const now = new Date();
+  let start = null;
+
+  if (normalized === 'day' || normalized === 'today') {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  } else if (normalized === 'week' || normalized === 'weekly') {
+    start = new Date(now);
+    start.setDate(now.getDate() - 7);
+  } else if (normalized === 'month' || normalized === 'monthly') {
+    start = new Date(now);
+    start.setMonth(now.getMonth() - 1);
+  } else if (normalized === 'year' || normalized === 'yearly') {
+    start = new Date(now);
+    start.setFullYear(now.getFullYear() - 1);
+  }
+
+  return start ? { start, end: now } : {};
+}
+
+function buildTelemetryMatch(qrCodes, period) {
+  const match = { binId: { $in: qrCodes }, fullness: { $gte: 0, $lte: 100 } };
+  const { start, end } = getPeriodDateRange(period);
+
+  if (start || end) {
+    match.timestamp = {};
+    if (start) match.timestamp.$gte = start;
+    if (end) match.timestamp.$lte = end;
+  }
+
+  return match;
+}
+
 function emptyPrediction(binId, note = 'ML service unavailable') {
   return {
     binId,
@@ -100,7 +136,7 @@ router.get('/', async (req, res) => {
 
     const qrCodes = validContainers.map((container) => String(container.qrCode));
     const latestReadings = qrCodes.length ? await History.aggregate([
-        { $match: { binId: { $in: qrCodes }, fullness: { $gte: 0, $lte: 100 } } },
+        { $match: buildTelemetryMatch(qrCodes, req.query.period) },
         { $sort: { timestamp: -1 } },
         { $group: { _id: '$binId', fullness: { $first: '$fullness' }, timestamp: { $first: '$timestamp' } } },
       ]) : [];

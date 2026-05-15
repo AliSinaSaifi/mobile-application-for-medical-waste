@@ -1,5 +1,6 @@
 {
   "count": 28,
+  "daysBack": 365,
   "statusMix": {
     "assigned": 6,
     "in_transit": 6,

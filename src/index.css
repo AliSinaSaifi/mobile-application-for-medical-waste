@@ -828,12 +828,18 @@ body {
 /* ─── Hard Mobile Fit Rules ─────────────────────────────────── */
 .mobile-shell {
     max-width: 430px;
+    --mobile-nav-left: max(12px, env(safe-area-inset-left));
+    --mobile-nav-size: 42px;
+    --mobile-nav-gap: 10px;
+    --mobile-nav-reserved: calc(var(--mobile-nav-left) + var(--mobile-nav-size) + var(--mobile-nav-gap));
 }
 
 .mobile-shell .app-main {
     font-size: 14px;
     overflow-x: hidden;
+    padding-left: var(--mobile-nav-reserved);
     padding-bottom: 0;
+    box-sizing: border-box;
 }
 
 .mobile-shell .app-main * {

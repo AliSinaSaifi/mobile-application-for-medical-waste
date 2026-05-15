@@ -141,6 +141,7 @@ const css = `
   .mobile-shell .db-brand { font-size: 1rem; }
   .mobile-shell .db-main {
     padding: 14px;
+    min-width: 0;
   }
   .mobile-shell .db-page-header h1 {
     font-size: 1.35rem;
@@ -164,18 +165,103 @@ const css = `
   }
   .mobile-shell .db-stats-grid,
   .mobile-shell .db-two-col,
-  .mobile-shell .db-analytics-grid,
   .mobile-shell .db-predictions-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+  }
+  .mobile-shell .db-analytics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0 !important;
   }
   .mobile-shell .db-actions-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 1fr) !important;
   }
   .mobile-shell .db-card {
     padding: 14px;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+  .mobile-shell .db-card-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+  }
+  .mobile-shell .db-card-header > div {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .mobile-shell .db-card-title {
+    line-height: 1.3;
+  }
+  .mobile-shell .db-card-link {
+    white-space: nowrap;
+  }
+  .mobile-shell .db-analytics-item {
+    border-right: 0;
+    border-bottom: 1px solid #e4e9f0;
+    padding: 14px 8px;
+  }
+  .mobile-shell .db-analytics-item:nth-child(odd) {
+    border-right: 1px solid #e4e9f0;
+  }
+  .mobile-shell .db-analytics-item:nth-child(n+3) {
+    border-bottom: 0;
   }
   .mobile-shell .db-chart-area {
     height: 120px;
+    gap: 2px;
+    padding: 8px;
+  }
+  .mobile-shell .db-bar {
+    min-width: 2px;
+  }
+  .mobile-shell .db-donut-wrap {
+    align-items: stretch !important;
+  }
+  .mobile-shell .db-donut {
+    margin: 0 auto;
+  }
+  .mobile-shell .db-waste-label {
+    min-width: 0;
+    flex: 1;
+  }
+  .mobile-shell .db-waste-label span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-shell .db-waste-bar-wrap {
+    width: 100%;
+    margin: 0 0 8px;
+  }
+  .mobile-shell .db-predictions-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+  .mobile-shell .db-predictions-title-row {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 6px 8px;
+  }
+  .mobile-shell .db-badge {
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.25;
+  }
+  .mobile-shell .db-pred-row {
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .mobile-shell .db-pred-row-label {
+    flex-shrink: 0;
+  }
+  .mobile-shell .db-pred-row-val,
+  .mobile-shell .db-pred-id,
+  .mobile-shell .db-pred-meta {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .mobile-shell .db-user-pill {
     font-size: .75rem;
@@ -297,7 +383,7 @@ function Dashboard() {
   const fetchAll = async () => {
     try {
       // 1. Bins from MongoDB telemetry
-      const binsRes = await getBins();
+      const binsRes = await getBins({ period: period.toLowerCase() });
       setBins(binsRes.data);
 
       // 2. AI predictions for each bin
@@ -340,7 +426,7 @@ function Dashboard() {
       clearInterval(dataInterval);
       clearInterval(notifInterval);
      };
-  }, []);
+  }, [period]);
 
   useSocket({
   // New telemetry reading → update bin in state without full refetch
@@ -365,12 +451,6 @@ function Dashboard() {
   },
 });
  
-// Keep ONE initial fetch on mount, remove the interval:
-useEffect(() => {
-  fetchAll();
-  fetchNotifications();
-}, []);
-
   // ── Actions ───────────────────────────────────────────────
   const handleMarkRead = async (id) => {
     try {
@@ -380,7 +460,6 @@ useEffect(() => {
     } catch (err) { console.error(err); }
   };
 
-  const handleLogout = () => { sessionStorage.clear(); navigate("/"); };
   const toggleSetting = (key) => setSettings(s => ({ ...s, [key]: !s[key] }));
 
   const barHeights = bins.map(b => Number(b.fullness) || 0);
@@ -411,7 +490,6 @@ useEffect(() => {
                 {role}
               </span>
             </div>
-            <button className="db-btn db-btn-danger" onClick={handleLogout}>Log Out</button>
           </div>
         </div>
 
@@ -533,8 +611,8 @@ useEffect(() => {
 
           {/* AI PREDICTIONS — real data */}
           <div className="db-card">
-            <div className="db-card-header">
-              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div className="db-card-header db-predictions-header">
+              <div className="db-predictions-title-row">
                 <span className="db-card-title">AI Maintenance Predictions</span>
                 <span className="db-badge db-badge-green">✓ Live · {Object.keys(predictions).length} bins</span>
               </div>

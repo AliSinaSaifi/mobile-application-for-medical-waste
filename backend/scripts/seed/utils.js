@@ -110,18 +110,28 @@ function generateContainers() {
 function generateTelemetryForContainer(container, index, config = readJson('telemetry.json')) {
   const now = new Date();
   const points = randInt(config.minPointsPerContainer, config.maxPointsPerContainer);
-  const start = addDays(now, -config.daysBack + rand(0, 3));
+  const daysBack = Math.max(1, Number(config.daysBack || 21));
+  const recentOffsetHours = config.distributeAcrossRange ? rand(0, 18) : 0;
+  const end = addHours(now, -recentOffsetHours);
+  const start = config.distributeAcrossRange
+    ? addDays(end, -daysBack)
+    : addDays(now, -daysBack + rand(0, 3));
   const category = index % 12;
   let fullness = category < 2 ? rand(8, 22) : category < 5 ? rand(25, 45) : category < 8 ? rand(48, 66) : rand(62, 78);
   const hourlyStep = category < 2 ? rand(0.25, 0.55) : category < 5 ? rand(0.45, 0.85) : rand(0.7, 1.35);
-  const intervalHours = rand(4, 8);
+  const intervalHours = config.distributeAcrossRange
+    ? (daysBack * 24) / Math.max(points - 1, 1)
+    : rand(4, 8);
+  const readingStep = config.distributeAcrossRange
+    ? (category < 2 ? rand(0.7, 1.6) : category < 5 ? rand(1.1, 2.2) : rand(1.7, 3.4))
+    : null;
   const resetThreshold = category < 3 ? rand(70, 84) : rand(86, 98);
   const docs = [];
 
   for (let i = 0; i < points; i += 1) {
     const timestamp = addHours(start, i * intervalHours);
     const noise = rand(-1.2, 1.2);
-    fullness = clamp(fullness + hourlyStep * intervalHours + noise, 4, 100);
+    fullness = clamp(fullness + (readingStep ?? hourlyStep * intervalHours) + noise, 4, 100);
 
     if (fullness >= resetThreshold && i < points - 8 && (i + index) % 17 === 0) {
       docs.push({ binId: container.qrCode, fullness: Number(fullness.toFixed(1)), timestamp });

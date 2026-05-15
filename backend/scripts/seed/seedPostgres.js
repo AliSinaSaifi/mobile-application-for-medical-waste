@@ -100,15 +100,28 @@ async function seedPostgres({ close = true } = {}) {
       order: [['qrCode', 'ASC']],
     });
 
-    const statuses = Object.entries(taskConfig.statusMix).flatMap(([status, count]) => Array.from({ length: count }, () => status));
+    const statusCounts = Object.entries(taskConfig.statusMix).map(([status, count]) => ({ status, remaining: count }));
+    const statuses = [];
+    while (statusCounts.some((entry) => entry.remaining > 0)) {
+      statusCounts.forEach((entry) => {
+        if (entry.remaining > 0) {
+          statuses.push(entry.status);
+          entry.remaining -= 1;
+        }
+      });
+    }
     const taskCount = Math.min(Number(process.env.SEED_TASK_COUNT || taskConfig.count || statuses.length), createdContainers.length, statuses.length);
+    const taskDaysBack = Math.max(taskCount, Number(taskConfig.daysBack || taskCount));
     const now = new Date();
 
     for (let i = 0; i < taskCount; i += 1) {
       const status = statuses[i];
       const driver = pick(drivers, i);
       const utilizer = ['in_transit', 'at_utilization', 'completed'].includes(status) ? pick(utilizers, i) : null;
-      const assignedAt = addDays(now, -Math.max(1, taskCount - i));
+      const assignedOffset = taskCount === 1
+        ? 1
+        : Math.round(taskDaysBack - (i * (taskDaysBack - 1)) / (taskCount - 1));
+      const assignedAt = addDays(now, -Math.max(1, assignedOffset));
       const completedAt = status === 'completed' ? addDays(assignedAt, 1) : null;
       const containerId = createdContainers[i].qrCode;
 

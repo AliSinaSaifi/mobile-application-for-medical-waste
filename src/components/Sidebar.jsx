@@ -122,10 +122,10 @@ const css = `
     .sb-menu-button {
       position: fixed;
       top: max(14px, env(safe-area-inset-top));
-      left: max(14px, env(safe-area-inset-left));
+      left: var(--mobile-nav-left, max(12px, env(safe-area-inset-left)));
       z-index: 920;
-      width: 42px;
-      height: 42px;
+      width: var(--mobile-nav-size, 42px);
+      height: var(--mobile-nav-size, 42px);
       border: 1px solid rgba(15, 22, 35, .12);
       border-radius: 8px;
       background: rgba(255,255,255,.92);

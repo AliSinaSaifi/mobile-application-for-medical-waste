@@ -55,7 +55,7 @@ export const changePassword     = (currentPassword, newPassword, confirmPassword
 export const updateVerifiedPhone = (phoneNumber)                   => api.patch("/api/profile/phone", { phoneNumber });
 
 // ── Bins ──────────────────────────────────────────────────────
-export const getBins       = ()      => api.get("/api/bins");
+export const getBins       = (params = {}) => api.get("/api/bins", { params });
 export const getBinHistory = (binId) => api.get(`/api/bins/history/${binId}`);
 export const getPredict    = (binId) => api.get(`/api/bins/predict/${binId}`);
 
