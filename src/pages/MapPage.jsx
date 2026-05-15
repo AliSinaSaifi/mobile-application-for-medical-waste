@@ -10,26 +10,15 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-function makeIcon(fullness) {
-  const pct = Number.isFinite(Number(fullness)) ? Number(fullness) : 0;
-  const color = pct >= 80 ? "#EF4444" : pct >= 60 ? "#F59E0B" : "#00D68F";
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
-      <ellipse cx="16" cy="40" rx="6" ry="2" fill="rgba(0,0,0,.2)"/>
-      <path d="M16 0C9.4 0 4 5.4 4 12c0 9 12 28 12 28S28 21 28 12C28 5.4 22.6 0 16 0z"
-            fill="${color}" stroke="#fff" stroke-width="2"/>
-      <circle cx="16" cy="12" r="6" fill="#fff"/>
-      <text x="16" y="16" text-anchor="middle" font-size="7" font-weight="700"
-            font-family="sans-serif" fill="${color}">${pct}%</text>
-    </svg>`;
-  return L.divIcon({
-    html: svg,
-    className: "",
-    iconSize: [32, 42],
-    iconAnchor: [16, 42],
-    popupAnchor: [0, -44],
-  });
-}
+const redBinIcon = new L.Icon({
+  iconRetinaUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
 
 const css = `
   .mp-root { min-height: 100vh; background: #f0f4f8; font-family: 'Geist', 'DM Sans', sans-serif; color: #1a2035; padding: 32px; }
@@ -176,7 +165,7 @@ function MapPage() {
                 <TileLayer attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 {selected && <FlyTo target={selected} />}
                 {bins.map((bin) => (
-                  <Marker key={bin.qrCode} position={[bin.lat, bin.lon]} icon={makeIcon(bin.latestFullness)} eventHandlers={{ click: () => setSelected(bin) }}>
+                  <Marker key={bin.qrCode} position={[bin.lat, bin.lon]} icon={redBinIcon} eventHandlers={{ click: () => setSelected(bin) }}>
                     <Popup>
                       <div className="mp-popup">
                         <h3>{bin.qrCode}</h3>
