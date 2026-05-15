@@ -80,3 +80,11 @@ export const exportReports = (params = {}) => api.get("/api/reports/export", {
   params,
   responseType: "blob",
 });
+
+// Route history
+export const getRouteHistory = (params = {}) => api.get("/api/route-history", { params });
+export const getRouteHistoryDetail = (id) => api.get(`/api/route-history/${id}`);
+export const exportRouteHistory = (params = {}) => api.get("/api/route-history/export", {
+  params,
+  responseType: "blob",
+});

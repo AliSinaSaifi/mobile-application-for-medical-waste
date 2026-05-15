@@ -66,6 +66,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/utilizer', require('./routes/utilizer'));
 app.use('/api/profile', require('./routes/profile'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/route-history', require('./routes/routeHistory'));
 
 const PORT = Number(process.env.PORT) || 5000;
 const HOST = process.env.HOST || '0.0.0.0';

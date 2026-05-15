@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -7,7 +7,7 @@ import {
   Popup,
 } from "react-leaflet";
 import L from "leaflet";
-import { Link } from 'react-router-dom';
+import { getRouteHistory, getRouteHistoryDetail } from "../services/api";
 
 // Leaflet icon fix
 delete L.Icon.Default.prototype._getIconUrl;
@@ -18,6 +18,12 @@ L.Icon.Default.mergeOptions({
 });
 
 const mockRoutes = []; // no routes yet
+const defaultKpis = {
+  totalRoutes: 0,
+  completed: 0,
+  totalDistance: 0,
+  containersCollected: 0,
+};
 
 const css = `
   
@@ -149,6 +155,52 @@ function RouteHistory() {
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [period, setPeriod]   = useState("all");
   const [status, setStatus]   = useState("all");
+  const [routes, setRoutes]   = useState(mockRoutes);
+  const [kpis, setKpis]       = useState(defaultKpis);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  const params = useMemo(() => ({ period, status }), [period, status]);
+
+  const loadRoutes = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await getRouteHistory(params);
+      const nextRoutes = data.routes || [];
+      setRoutes(nextRoutes);
+      setKpis(data.kpis || defaultKpis);
+      setSelectedRoute((current) => {
+        if (!current) return nextRoutes[0] || null;
+        return nextRoutes.find((route) => route.id === current.id) || nextRoutes[0] || null;
+      });
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || "Unable to load route history");
+      setRoutes([]);
+      setKpis(defaultKpis);
+      setSelectedRoute(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectRoute = async (route) => {
+    setSelectedRoute(route);
+    setError("");
+    try {
+      const { data } = await getRouteHistoryDetail(route.id);
+      setSelectedRoute(data);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || "Unable to load route details");
+    }
+  };
+
+  useEffect(() => {
+    loadRoutes();
+  }, []);
+
+  const selectedCoordinates = selectedRoute?.coordinates || [];
+  const mapCenter = selectedCoordinates[0] || [51.1283, 71.4305];
 
   return (
     <>
@@ -161,16 +213,18 @@ function RouteHistory() {
             <h1>Route History</h1>
             <p>View and analyse completed collection routes</p>
           </div>
-          <button className="rh-btn rh-btn-blue"> Refresh</button>
+          <button className="rh-btn rh-btn-blue" onClick={loadRoutes} disabled={loading}>
+            {loading ? " Loading..." : " Refresh"}
+          </button>
         </div>
 
         {/* KPI */}
         <div className="rh-kpi-grid">
           {[
-            { label: "Total Routes",         val: mockRoutes.length },
-            { label: "Completed",            val: mockRoutes.filter(r => r.status === "completed").length },
-            { label: "Total Distance",       val: `${mockRoutes.reduce((s,r) => s + (r.distance||0), 0)} km` },
-            { label: "Containers Collected", val: mockRoutes.reduce((s,r) => s + (r.bins||0), 0) },
+            { label: "Total Routes",         val: kpis.totalRoutes || 0 },
+            { label: "Completed",            val: kpis.completed || 0 },
+            { label: "Total Distance",       val: `${kpis.totalDistance || 0} km` },
+            { label: "Containers Collected", val: kpis.containersCollected || 0 },
           ].map((k) => (
             <div className="rh-kpi-card" key={k.label}>
               <div className="rh-kpi-label">{k.label}</div>
@@ -199,28 +253,29 @@ function RouteHistory() {
               <option value="cancelled">Cancelled</option>
             </select>
           </div>
-          <button className="rh-btn">Apply Filters</button>
+          <button className="rh-btn" onClick={loadRoutes} disabled={loading}>Apply Filters</button>
         </div>
+        {error && <div style={{ marginBottom: 12, color: "#B91C1C", fontSize: "0.82rem" }}>{error}</div>}
 
         {/* MAIN */}
         <div className="rh-main">
 
           {/* SIDEBAR */}
           <div className="rh-sidebar">
-            <div className="rh-sidebar-head">Routes ({mockRoutes.length})</div>
+            <div className="rh-sidebar-head">Routes ({routes.length})</div>
             <div className="rh-sidebar-list">
-              {mockRoutes.length === 0 ? (
+              {routes.length === 0 ? (
                 <div className="rh-empty">
                   <div className="rh-empty-icon">🛣️</div>
-                  <h3>No routes found</h3>
-                  <p>Routes will appear here once collection trips are recorded in the system.</p>
+                  <h3>{loading ? "Loading routes" : "No routes found"}</h3>
+                  <p>{loading ? "Fetching route history from the system." : "Routes will appear here once collection trips are recorded in the system."}</p>
                 </div>
               ) : (
-                mockRoutes.map((route) => (
+                routes.map((route) => (
                   <div
                     key={route.id}
                     className={`rh-route-item ${selectedRoute?.id === route.id ? "active" : ""}`}
-                    onClick={() => setSelectedRoute(route)}
+                    onClick={() => selectRoute(route)}
                   >
                     <div className="rh-route-item-accent" />
                     <div className="rh-route-name">{route.name}</div>
@@ -245,15 +300,16 @@ function RouteHistory() {
               {selectedRoute && <span style={{ fontSize: "0.8rem", color: "#5e6a85" }}>{selectedRoute.name}</span>}
             </div>
             <div className="rh-map-body">
-              {!selectedRoute ? (
+              {!selectedRoute || selectedCoordinates.length === 0 ? (
                 <div className="rh-map-placeholder">
                   <div className="rh-map-placeholder-icon"></div>
-                  <h2>No route selected</h2>
-                  <p>Select a route from the list on the left<br />to view it on the map.</p>
+                  <h2>{selectedRoute ? "No GPS points available" : "No route selected"}</h2>
+                  <p>{selectedRoute ? "This route has no usable coordinates yet." : <>Select a route from the list on the left<br />to view it on the map.</>}</p>
                 </div>
               ) : (
                 <MapContainer
-                  center={selectedRoute.coordinates[0]}
+                  key={selectedRoute.id}
+                  center={mapCenter}
                   zoom={12}
                   style={{ height: "100%", width: "100%" }}
                 >
@@ -262,12 +318,12 @@ function RouteHistory() {
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
                   <Polyline
-                    positions={selectedRoute.coordinates}
+                    positions={selectedCoordinates}
                     color="#1A6EFF"
                     weight={4}
                     opacity={0.8}
                   />
-                  {selectedRoute.coordinates.map((point, i) => (
+                  {selectedCoordinates.map((point, i) => (
                     <Marker key={i} position={point}>
                       <Popup>Stop {i + 1}</Popup>
                     </Marker>
