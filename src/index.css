@@ -828,10 +828,8 @@ body {
 /* ─── Hard Mobile Fit Rules ─────────────────────────────────── */
 .mobile-shell {
     max-width: 430px;
-    --mobile-nav-left: max(12px, env(safe-area-inset-left));
     --mobile-nav-size: 42px;
     --mobile-nav-gap: 10px;
-    --mobile-nav-reserved: calc(var(--mobile-nav-left) + var(--mobile-nav-size) + var(--mobile-nav-gap));
 }
 
 .mobile-shell .app-main {
@@ -842,19 +840,92 @@ body {
     box-sizing: border-box;
 }
 
+.mobile-shell .app-main * {
+    max-width: 100%;
+}
+
+.mobile-header-row {
+    display: none;
+}
+
+.mobile-shell .mobile-header-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--mobile-nav-gap);
+    width: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+    background: #f0f4f8;
+}
+
+.mobile-shell .mobile-header-menu {
+    width: var(--mobile-nav-size) !important;
+    height: var(--mobile-nav-size);
+    flex: 0 0 var(--mobile-nav-size);
+    border: 1px solid rgba(15, 22, 35, .12);
+    border-radius: 8px;
+    background: rgba(255,255,255,.92);
+    color: #0f1623;
+    box-shadow: 0 8px 24px rgba(11,15,26,.14);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background .18s, transform .18s, box-shadow .18s;
+}
+
+.mobile-shell .mobile-header-menu:hover {
+    background: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 12px 30px rgba(11,15,26,.18);
+}
+
+.mobile-header-menu-icon {
+    width: 21px;
+    height: 21px;
+}
+
+.mobile-shell .mobile-header-copy {
+    min-width: 0;
+    flex: 1;
+    padding-top: 1px;
+}
+
+.mobile-shell .mobile-header-copy h1 {
+    margin: 0 0 3px;
+    color: #1a2035;
+    font-size: 1.45rem;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: 0;
+}
+
+.mobile-shell .mobile-header-copy p {
+    margin: 0;
+    color: #5e6a85;
+    font-size: 0.85rem;
+    line-height: 1.35;
+}
+
 .mobile-shell .app-main > [class$='-root'] > [class$='-header']:first-child,
 .mobile-shell .app-main > [class*='-root '] > [class$='-header']:first-child,
 .mobile-shell .app-main > [class$='-root'] > [class*='-page-header']:first-child,
-.mobile-shell .app-main > [class*='-root '] > [class*='-page-header']:first-child,
-.mobile-shell .app-main > [class$='-root'] > .db-topbar:first-child,
-.mobile-shell .app-main > [class*='-root '] > .db-topbar:first-child {
-    min-height: var(--mobile-nav-size);
-    padding-left: var(--mobile-nav-reserved) !important;
-    box-sizing: border-box;
+.mobile-shell .app-main > [class*='-root '] > [class*='-page-header']:first-child {
+    margin-bottom: 12px !important;
 }
 
-.mobile-shell .app-main * {
-    max-width: 100%;
+.mobile-shell .app-main > [class$='-root'] > [class$='-header']:first-child h1,
+.mobile-shell .app-main > [class*='-root '] > [class$='-header']:first-child h1,
+.mobile-shell .app-main > [class$='-root'] > [class*='-page-header']:first-child h1,
+.mobile-shell .app-main > [class*='-root '] > [class*='-page-header']:first-child h1,
+.mobile-shell .app-main > [class$='-root'] > [class$='-header']:first-child p,
+.mobile-shell .app-main > [class*='-root '] > [class$='-header']:first-child p,
+.mobile-shell .app-main > [class$='-root'] > [class*='-page-header']:first-child p,
+.mobile-shell .app-main > [class*='-root '] > [class*='-page-header']:first-child p,
+.mobile-shell .db-topbar,
+.mobile-shell .db-page-header {
+    display: none !important;
 }
 
 .mobile-shell [class$='-root'],

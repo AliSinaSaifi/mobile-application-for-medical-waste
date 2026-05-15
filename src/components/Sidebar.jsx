@@ -120,10 +120,7 @@ const css = `
     }
 
     .sb-menu-button {
-      position: fixed;
-      top: max(14px, env(safe-area-inset-top));
-      left: var(--mobile-nav-left, max(12px, env(safe-area-inset-left)));
-      z-index: 920;
+      position: static;
       width: var(--mobile-nav-size, 42px);
       height: var(--mobile-nav-size, 42px);
       border: 1px solid rgba(15, 22, 35, .12);
@@ -304,9 +301,11 @@ function SbIcon({ name, className = "sb-icon" }) {
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({ open: controlledOpen, setOpen: setControlledOpen, showMenuButton = true }) {
   const location = useLocation();
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = setControlledOpen ?? setLocalOpen;
 
   const role     = sessionStorage.getItem("mw_role")  || "personnel";
   const name     = sessionStorage.getItem("mw_name")  || "User";
@@ -341,15 +340,17 @@ export default function Sidebar() {
   return (
     <>
       <style>{css}</style>
-      <button
-        type="button"
-        className={`sb-menu-button ${open ? "open" : ""}`}
-        aria-label="Open navigation menu"
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
-      >
-        <SbIcon name="menu" className="sb-menu-icon" />
-      </button>
+      {showMenuButton && (
+        <button
+          type="button"
+          className={`sb-menu-button ${open ? "open" : ""}`}
+          aria-label="Open navigation menu"
+          aria-expanded={open}
+          onClick={() => setOpen(true)}
+        >
+          <SbIcon name="menu" className="sb-menu-icon" />
+        </button>
+      )}
 
       <div className={`sb-shell ${open ? "open" : ""}`} aria-hidden={!open}>
         <div className="sb-backdrop" onClick={() => setOpen(false)} />
