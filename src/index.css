@@ -48,6 +48,7 @@ body {
     -webkit-font-smoothing: antialiased;
     height: 100%;
     overflow: hidden;
+    max-width: 100vw;
 }
 
 #root {
@@ -68,12 +69,15 @@ body {
     min-height: 100%;
     height: 100%;
     background: #f0f4f8;
+    width: 100%;
+    overflow: hidden;
 }
 
 .app-main {
     flex: 1;
     min-width: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     height: 100%;
 }
 
@@ -678,7 +682,6 @@ body {
 }
 
 .mobile-shell .app-layout {
-    display: block;
     position: relative;
     min-height: 100%;
     height: 100%;
@@ -688,7 +691,17 @@ body {
     height: 100%;
     overflow-y: auto;
     padding-left: 0;
-    padding-bottom: 86px;
+    padding-bottom: 0;
+}
+
+@media (max-width: 767px) {
+    .mobile-shell .app-layout {
+        display: block;
+    }
+
+    body.sb-drawer-open .app-main {
+        overflow: hidden;
+    }
 }
 
 .mobile-shell .landing-page,
@@ -820,7 +833,7 @@ body {
 .mobile-shell .app-main {
     font-size: 14px;
     overflow-x: hidden;
-    padding-bottom: 86px;
+    padding-bottom: 0;
 }
 
 .mobile-shell .app-main * {

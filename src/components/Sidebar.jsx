@@ -1,28 +1,57 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
-const COLLAPSED_W = 60;
-const EXPANDED_W  = 240;
+const SIDEBAR_W = 286;
+const DESKTOP_COLLAPSED_W = 60;
+const DESKTOP_EXPANDED_W = 240;
 
 const css = `
-
-  .sb-mobile-hover-area {
-    position: relative;
-    z-index: 600;
+  .sb-shell {
+    width:${DESKTOP_COLLAPSED_W}px;
+    min-width:${DESKTOP_COLLAPSED_W}px;
+    height:100vh;
+    position:sticky;
+    top:0;
+    z-index:200;
+    pointer-events:auto;
+    transition:width .25s cubic-bezier(.22,1,.36,1),min-width .25s cubic-bezier(.22,1,.36,1);
+  }
+  .sb-shell.open {
+    width:${DESKTOP_EXPANDED_W}px;
+    min-width:${DESKTOP_EXPANDED_W}px;
   }
 
-  .sb-mobile-trigger {
+  .sb-menu-button {
+    display: none;
+  }
+
+  .sb-menu-icon {
+    width: 21px;
+    height: 21px;
+  }
+
+  .sb-backdrop {
     display: none;
   }
   
   .sb-root {
-    width:${COLLAPSED_W}px; min-width:${COLLAPSED_W}px; height:100vh; position:sticky; top:0;
+    width:${DESKTOP_COLLAPSED_W}px; min-width:${DESKTOP_COLLAPSED_W}px; height:100vh; position:sticky; top:0;
     background:#0f1623; display:flex; flex-direction:column;
     font-family:'Geist',sans-serif; border-right:1px solid rgba(255,255,255,.06);
-    overflow:hidden; z-index:200;
+    overflow:hidden; z-index:200; pointer-events:auto;
     transition:width .25s cubic-bezier(.22,1,.36,1),min-width .25s cubic-bezier(.22,1,.36,1);
   }
-  .sb-root.expanded{width:${EXPANDED_W}px;min-width:${EXPANDED_W}px;}
+  .sb-shell.open .sb-root{width:${DESKTOP_EXPANDED_W}px;min-width:${DESKTOP_EXPANDED_W}px;}
+  .mobile-shell .sb-root {
+    width:${DESKTOP_COLLAPSED_W}px !important;
+    min-width:${DESKTOP_COLLAPSED_W}px !important;
+    max-width:none !important;
+    padding:0 !important;
+  }
+  .mobile-shell .sb-shell.open .sb-root {
+    width:${DESKTOP_EXPANDED_W}px !important;
+    min-width:${DESKTOP_EXPANDED_W}px !important;
+  }
   .sb-logo{padding:16px 0;height:64px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;
     display:flex;align-items:center;padding-left:18px;overflow:hidden;white-space:nowrap;}
   .sb-logo-icon{width:26px;height:26px;flex-shrink:0;background:linear-gradient(135deg,#1A6EFF,#00D68F);
@@ -30,13 +59,13 @@ const css = `
   .sb-logo-text{margin-left:11px;font-size:1.1rem;font-weight:800;letter-spacing:-.03em;
     background:linear-gradient(120deg,#1A6EFF,#00D68F);-webkit-background-clip:text;
     -webkit-text-fill-color:transparent;background-clip:text;opacity:0;transition:opacity .2s .05s;white-space:nowrap;}
-  .sb-root.expanded .sb-logo-text{opacity:1;}
+  .sb-shell.open .sb-logo-text{opacity:1;}
   .sb-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0;display:flex;flex-direction:column;}
   .sb-nav::-webkit-scrollbar{display:none;}
   .sb-section-label{font-size:.6rem;font-weight:700;color:rgba(255,255,255,.2);text-transform:uppercase;
     letter-spacing:.1em;padding:10px 0 3px 20px;white-space:nowrap;overflow:hidden;
     opacity:0;max-height:0;transition:opacity .2s,max-height .2s;}
-  .sb-root.expanded .sb-section-label{opacity:1;max-height:30px;}
+  .sb-shell.open .sb-section-label{opacity:1;max-height:30px;}
   .sb-link{display:flex;align-items:center;height:42px;text-decoration:none;font-size:.85rem;
     font-weight:500;color:rgba(255,255,255,.45);transition:background .18s,color .18s;
     position:relative;overflow:hidden;white-space:nowrap;}
@@ -44,21 +73,21 @@ const css = `
   .sb-link.active{background:rgba(26,110,255,.15);color:#fff;}
   .sb-link.active::before{content:'';position:absolute;left:0;top:7px;bottom:7px;
     width:3px;background:#1A6EFF;border-radius:0 3px 3px 0;}
-  .sb-icon-wrap{width:${COLLAPSED_W}px;min-width:${COLLAPSED_W}px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .sb-icon-wrap{width:${DESKTOP_COLLAPSED_W}px;min-width:${DESKTOP_COLLAPSED_W}px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
   .sb-icon{width:18px;height:18px;transition:color .18s;}
   .sb-link.active .sb-icon{color:#1A6EFF;}
   .sb-link:hover .sb-icon{color:rgba(255,255,255,.9);}
   .sb-link-label{flex:1;font-size:.85rem;opacity:0;transition:opacity .15s;overflow:hidden;}
-  .sb-root.expanded .sb-link-label{opacity:1;transition:opacity .2s .08s;}
+  .sb-shell.open .sb-link-label{opacity:1;transition:opacity .2s .08s;}
   .sb-badge{background:#1A6EFF;color:#fff;font-size:.58rem;font-weight:700;padding:1px 5px;
     border-radius:999px;margin-right:12px;opacity:0;transition:opacity .15s;flex-shrink:0;}
-  .sb-root.expanded .sb-badge{opacity:1;transition:opacity .2s .1s;}
-  .sb-link .sb-tooltip{position:absolute;left:${COLLAPSED_W+8}px;background:#1a2035;color:#fff;
+  .sb-shell.open .sb-badge{opacity:1;transition:opacity .2s .1s;}
+  .sb-link .sb-tooltip{position:absolute;left:${DESKTOP_COLLAPSED_W+8}px;background:#1a2035;color:#fff;
     font-size:.78rem;font-weight:600;padding:5px 10px;border-radius:6px;pointer-events:none;
     opacity:0;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:opacity .15s;z-index:999;}
   .sb-link .sb-tooltip::before{content:'';position:absolute;left:-4px;top:50%;transform:translateY(-50%);
     border:4px solid transparent;border-right-color:#1a2035;border-left:0;}
-  .sb-root:not(.expanded) .sb-link:hover .sb-tooltip{opacity:1;}
+  .sb-shell:not(.open) .sb-link:hover .sb-tooltip{opacity:1;}
   .sb-divider{height:1px;background:rgba(255,255,255,.06);margin:4px 0;flex-shrink:0;}
   .sb-user{padding:10px 0;border-top:1px solid rgba(255,255,255,.06);flex-shrink:0;overflow:hidden;}
   .sb-user-row{display:flex;align-items:center;height:44px;cursor:default;}
@@ -66,7 +95,7 @@ const css = `
     display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;color:#fff;
     flex-shrink:0;margin-left:15px;}
   .sb-user-info{margin-left:10px;overflow:hidden;opacity:0;transition:opacity .2s .05s;white-space:nowrap;}
-  .sb-root.expanded .sb-user-info{opacity:1;}
+  .sb-shell.open .sb-user-info{opacity:1;}
   .sb-user-name{font-size:.8rem;font-weight:600;color:rgba(255,255,255,.85);}
   .sb-user-role{font-size:.62rem;color:rgba(255,255,255,.3);text-transform:capitalize;}
   .sb-logout-row{display:flex;align-items:center;height:38px;cursor:pointer;
@@ -75,147 +104,114 @@ const css = `
   .sb-logout-icon-wrap{width:44px;min-width:44px;display:flex;align-items:center;justify-content:center;}
   .sb-logout-icon{width:16px;height:16px;color:#f87171;}
   .sb-logout-label{font-size:.82rem;font-weight:600;color:#f87171;opacity:0;transition:opacity .15s;}
-  .sb-root.expanded .sb-logout-label{opacity:1;transition:opacity .2s .08s;}
+  .sb-shell.open .sb-logout-label{opacity:1;transition:opacity .2s .08s;}
 
-  .mobile-shell .sb-mobile-hover-area {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    top: auto;
-    width: 100%;
-    height: 76px;
-    z-index: 650;
-    pointer-events: auto;
-  }
+  @media (max-width: 767px) {
+    .sb-shell,
+    .sb-shell.open {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      min-width: 0;
+      height: 100dvh;
+      z-index: 900;
+      pointer-events: none;
+      transition: none;
+    }
 
-  .mobile-shell .sb-mobile-trigger {
-    display: none !important;
-  }
+    .sb-menu-button {
+      position: fixed;
+      top: max(14px, env(safe-area-inset-top));
+      left: max(14px, env(safe-area-inset-left));
+      z-index: 920;
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(15, 22, 35, .12);
+      border-radius: 8px;
+      background: rgba(255,255,255,.92);
+      color: #0f1623;
+      box-shadow: 0 8px 24px rgba(11,15,26,.14);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: background .18s, transform .18s, box-shadow .18s, opacity .18s;
+    }
+    .sb-menu-button:hover {
+      background: #fff;
+      transform: translateY(-1px);
+      box-shadow: 0 12px 30px rgba(11,15,26,.18);
+    }
+    .sb-menu-button.open {
+      opacity: 0;
+      pointer-events: none;
+    }
 
-  .mobile-shell .sb-root,
-  .mobile-shell .sb-root.expanded {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    top: auto;
-    width: 100%;
-    min-width: 100%;
-    max-width: 100%;
-    height: 76px;
-    border-right: none;
-    border-top: 1px solid rgba(255,255,255,.12);
-    z-index: 650;
-    transform: none;
-    opacity: 1;
-    pointer-events: auto;
-    transition: none;
-  }
+    .sb-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      background: rgba(6, 10, 18, .52);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .24s ease;
+    }
+    .sb-shell.open .sb-backdrop {
+      opacity: 1;
+      pointer-events: auto;
+    }
 
-  .mobile-shell .sb-logo,
-  .mobile-shell .sb-section-label,
-  .mobile-shell .sb-divider,
-  .mobile-shell .sb-user,
-  .mobile-shell .sb-badge,
-  .mobile-shell .sb-tooltip {
-    display: none !important;
-  }
+    .sb-root,
+    .sb-shell.open .sb-root,
+    .mobile-shell .sb-root,
+    .mobile-shell .sb-shell.open .sb-root {
+      width:min(${SIDEBAR_W}px, 86vw) !important;
+      min-width:0 !important;
+      max-width:86vw !important;
+      height:100dvh;
+      position:fixed;
+      top:0;
+      left:0;
+      padding:0 !important;
+      z-index:910;
+      transform:translateX(-100%);
+      box-shadow:22px 0 50px rgba(0,0,0,.24);
+      transition:transform .25s cubic-bezier(.22,1,.36,1);
+    }
+    .sb-shell.open .sb-root,
+    .mobile-shell .sb-shell.open .sb-root {
+      transform:translateX(0);
+    }
 
-  .mobile-shell .sb-nav {
-    width: 100%;
-    height: 100%;
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 8px 8px max(8px, env(safe-area-inset-bottom));
-    gap: 4px;
-    scrollbar-width: none;
-  }
-  .mobile-shell .sb-nav::-webkit-scrollbar { display: none; }
+    .sb-logo-text,
+    .sb-shell.open .sb-logo-text,
+    .sb-section-label,
+    .sb-shell.open .sb-section-label,
+    .sb-link-label,
+    .sb-shell.open .sb-link-label,
+    .sb-badge,
+    .sb-shell.open .sb-badge,
+    .sb-user-info,
+    .sb-shell.open .sb-user-info,
+    .sb-logout-label,
+    .sb-shell.open .sb-logout-label {
+      opacity: 1;
+    }
 
-  .mobile-shell .sb-link {
-    min-width: 68px;
-    height: 56px;
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    padding: 0 2px;
-  }
+    .sb-section-label,
+    .sb-shell.open .sb-section-label {
+      max-height:30px;
+    }
 
-  .mobile-shell .sb-icon-wrap {
-    width: auto;
-    min-width: auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+    .sb-icon-wrap {
+      width:56px;
+      min-width:56px;
+    }
 
-  .mobile-shell .sb-icon {
-    width: 18px;
-    height: 18px;
-  }
-
-  .mobile-shell .sb-link-label,
-  .mobile-shell .sb-root.expanded .sb-link-label {
-    opacity: 1;
-    font-size: .58rem;
-    line-height: 1.1;
-    text-align: center;
-    max-width: 66px;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    overflow: hidden;
-  }
-
-  .mobile-shell .sb-link.active::before {
-    left: 12px;
-    right: 12px;
-    top: auto;
-    bottom: 2px;
-    width: auto;
-    height: 3px;
-    border-radius: 3px;
-  }
-
-  .sb-mobile-logout {
-    display: none;
-  }
-
-  .mobile-shell .sb-mobile-logout {
-    display: inline-flex;
-    min-width: 68px;
-    height: 56px;
-    border: none;
-    background: transparent;
-    color: rgba(255,255,255,.55);
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    cursor: pointer;
-    font-family: inherit;
-    padding: 0 2px;
-    border-radius: 10px;
-  }
-  .mobile-shell .sb-mobile-logout:hover {
-    background: rgba(239,68,68,.12);
-    color: #f87171;
-  }
-  .mobile-shell .sb-mobile-logout .sb-link-label {
-    opacity: 1;
-    font-size: .58rem;
-    line-height: 1.1;
-    text-align: center;
-    max-width: 66px;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    overflow: hidden;
+    .sb-tooltip {
+      display:none;
+    }
   }
 `;
 
@@ -296,6 +292,7 @@ const paths = {
   shield:<><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></>,
   logout:<><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
   recycle: <><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></>,
+  menu: <><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></>,
 };
 
 function SbIcon({ name, className = "sb-icon" }) {
@@ -317,6 +314,22 @@ export default function Sidebar() {
 
   const navItems = NAV[role] || NAV.personnel;
 
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  useEffect(() => {
+    document.body.classList.toggle("sb-drawer-open", open);
+    return () => document.body.classList.remove("sb-drawer-open");
+  }, [open]);
+
   const isActive = (to) =>
     to === "/dashboard" ? location.pathname === "/dashboard" : location.pathname.startsWith(to);
 
@@ -328,13 +341,24 @@ export default function Sidebar() {
   return (
     <>
       <style>{css}</style>
-      <div
-        className="sb-mobile-hover-area"
+      <button
+        type="button"
+        className={`sb-menu-button ${open ? "open" : ""}`}
+        aria-label="Open navigation menu"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
       >
-        <div className="sb-mobile-trigger" />
-        <div className={`sb-root ${open ? "expanded" : ""}`}
+        <SbIcon name="menu" className="sb-menu-icon" />
+      </button>
+
+      <div className={`sb-shell ${open ? "open" : ""}`} aria-hidden={!open}>
+        <div className="sb-backdrop" onClick={() => setOpen(false)} />
+        <aside
+          className="sb-root"
+          aria-label="Main navigation"
           onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}>
+          onMouseLeave={() => setOpen(false)}
+        >
 
         <div className="sb-logo">
           <div className="sb-logo-icon">M</div>
@@ -348,7 +372,8 @@ export default function Sidebar() {
               <div className="sb-section-label">{section.section}</div>
               {section.items.map((item) => (
                 <Link key={item.to} to={item.to}
-                  className={`sb-link ${isActive(item.to) ? "active" : ""}`}>
+                  className={`sb-link ${isActive(item.to) ? "active" : ""}`}
+                  onClick={() => setOpen(false)}>
                   <span className="sb-icon-wrap"><SbIcon name={item.icon} /></span>
                   <span className="sb-link-label">{item.label}</span>
                   {item.badge && <span className="sb-badge">{item.badge}</span>}
@@ -357,10 +382,6 @@ export default function Sidebar() {
               ))}
             </React.Fragment>
           ))}
-          <button className="sb-mobile-logout" onClick={handleLogout}>
-            <span className="sb-icon-wrap"><SbIcon name="logout" /></span>
-            <span className="sb-link-label">Logout</span>
-          </button>
         </nav>
 
         <div className="sb-user">
@@ -379,7 +400,7 @@ export default function Sidebar() {
           </div>
         </div>
 
-        </div>
+        </aside>
       </div>
     </>
   );
