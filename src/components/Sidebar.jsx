@@ -335,7 +335,7 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     sessionStorage.clear();
-    window.location.href = "/login";
+    window.location.href = "/";
   };
 
   return (

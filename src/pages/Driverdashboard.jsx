@@ -131,7 +131,7 @@ export default function DriverDashboard() {
   };
 
   useEffect(() => {
-  if (sessionStorage.getItem("mw_logged_in") !== "true") navigate("/login");
+  if (sessionStorage.getItem("mw_logged_in") !== "true") navigate("/");
   fetchTasks();
   const id = setInterval(fetchTasks, 15000);
   return () => clearInterval(id);

@@ -258,7 +258,7 @@ function Dashboard() {
   const role     = sessionStorage.getItem("mw_role") || "personnel";
 
   useEffect(() => {
-    if (sessionStorage.getItem("mw_logged_in") !== "true") navigate("/login");
+    if (sessionStorage.getItem("mw_logged_in") !== "true") navigate("/");
   }, [navigate]);
 
   // ── State ─────────────────────────────────────────────────
@@ -380,7 +380,7 @@ useEffect(() => {
     } catch (err) { console.error(err); }
   };
 
-  const handleLogout = () => { sessionStorage.clear(); navigate("/login"); };
+  const handleLogout = () => { sessionStorage.clear(); navigate("/"); };
   const toggleSetting = (key) => setSettings(s => ({ ...s, [key]: !s[key] }));
 
   const barHeights = bins.map(b => Number(b.fullness) || 0);

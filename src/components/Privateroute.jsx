@@ -7,7 +7,7 @@ function PrivateRoute({ children, requiredRole }) {
   const userRole   = sessionStorage.getItem("mw_role");
 
   if (!isLoggedIn) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   // Optional role check (e.g. requiredRole="admin")
