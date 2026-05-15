@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 /**
  * Single source of truth for API + Socket.io base URL.
  * Set VITE_API_URL in .env (e.g. https://api.example.com — no trailing slash).
@@ -7,7 +9,14 @@ function normalizeBaseUrl(raw) {
   return raw.trim().replace(/\/+$/, "");
 }
 
-export const API_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL);
+const PRODUCTION_API_URL = "https://mobile-application-for-medical-waste-production.up.railway.app";
+const envApiUrl = normalizeBaseUrl(import.meta.env.VITE_API_URL);
+const isNative = Capacitor.isNativePlatform();
+const isLocalApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(envApiUrl);
+
+export const API_URL = isNative && (!envApiUrl || isLocalApiUrl)
+  ? PRODUCTION_API_URL
+  : envApiUrl;
 export const API_BASE_URL = API_URL;
 /** False when the bundle was built without VITE_API_URL (e.g. local `npm run build` before `cap sync`). */
 export const isApiConfigured = Boolean(API_URL);
