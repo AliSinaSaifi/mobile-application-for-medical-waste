@@ -30,7 +30,20 @@ export default api;
 
 // ── Auth ──────────────────────────────────────────────────────
 export const login    = (email, password)           => api.post("/api/auth/login",    { email, password });
-export const register = (fullName, username, email, password) => api.post("/api/auth/register", { fullName, username, email, password });
+export const register = (payloadOrFullName, username, email, password) => {
+  const payload = typeof payloadOrFullName === "object"
+    ? {
+        fullName: payloadOrFullName.fullName,
+        username: payloadOrFullName.username,
+        email: payloadOrFullName.email,
+        password: payloadOrFullName.password,
+      }
+    : { fullName: payloadOrFullName, username, email, password };
+
+  return api.post("/api/auth/register", payload, {
+    headers: { "Content-Type": "application/json" },
+  });
+};
 export const logout   = ()                          => api.post("/api/auth/logout");
 export const getMe    = ()                          => api.get("/api/auth/me");
 

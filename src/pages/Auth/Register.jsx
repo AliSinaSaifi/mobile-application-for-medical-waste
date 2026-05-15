@@ -20,15 +20,24 @@ const Register = () => {
     setError("");
     setSuccess("");
 
-    if (form.password !== form.confirmPassword) return setError("Passwords do not match.");
-    if (form.password.length < 6) return setError("Password must be at least 6 characters.");
-    if (!/^[A-Za-z0-9_-]{3,30}$/.test(form.username)) {
+    const formData = new FormData(e.currentTarget);
+    const payload = {
+      fullName: String(formData.get("fullName") || form.fullName).trim(),
+      username: String(formData.get("username") || form.username).trim(),
+      email: String(formData.get("email") || form.email).trim(),
+      password: String(formData.get("password") || form.password),
+    };
+    const confirmPassword = String(formData.get("confirmPassword") || form.confirmPassword);
+
+    if (payload.password !== confirmPassword) return setError("Passwords do not match.");
+    if (payload.password.length < 6) return setError("Password must be at least 6 characters.");
+    if (!/^[A-Za-z0-9_-]{3,30}$/.test(payload.username)) {
       return setError("Username must be 3-30 chars and only letters, numbers, underscores, or hyphens.");
     }
 
     setLoading(true);
     try {
-      await register(form.fullName, form.username, form.email, form.password);
+      await register(payload);
       setSuccess("Account created. You can log in now.");
       setTimeout(() => navigate("/login"), 900);
     } catch (err) {
@@ -53,6 +62,7 @@ const Register = () => {
             <label>Full Name</label>
             <input
               type="text"
+              name="fullName"
               placeholder="Dr. Jane Smith"
               required
               value={form.fullName}
@@ -63,6 +73,7 @@ const Register = () => {
             <label>Username</label>
             <input
               type="text"
+              name="username"
               placeholder="your_username"
               required
               value={form.username}
@@ -73,6 +84,7 @@ const Register = () => {
             <label>Email</label>
             <input
               type="email"
+              name="email"
               placeholder="you@example.com"
               required
               value={form.email}
@@ -83,6 +95,7 @@ const Register = () => {
             <label>Password</label>
             <input
               type="password"
+              name="password"
               placeholder="••••••••"
               required
               value={form.password}
@@ -93,6 +106,7 @@ const Register = () => {
             <label>Confirm Password</label>
             <input
               type="password"
+              name="confirmPassword"
               placeholder="••••••••"
               required
               value={form.confirmPassword}
