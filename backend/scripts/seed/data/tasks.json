@@ -1,0 +1,9 @@
+{
+  "count": 28,
+  "statusMix": {
+    "assigned": 6,
+    "in_transit": 6,
+    "at_utilization": 5,
+    "completed": 11
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "minWeightKg": 18,
+  "maxWeightKg": 240,
+  "methods": ["incineration", "autoclave", "chemical"]
+}

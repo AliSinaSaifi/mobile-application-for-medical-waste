@@ -2,7 +2,7 @@ const router = require('express').Router();
 const axios = require('axios');
 const History = require('../models/mongo/History');
 const Container = require('../models/pg/Container');
-const { getMlConfig } = require('../config/ml');
+const { getMlConfig, getMlRequestOptions } = require('../config/ml');
 const { hasValidCoordinates } = require('../utils/containerValidation');
 
 function normalizeStatus(fullness, hasTelemetry) {
@@ -62,6 +62,13 @@ function normalizePrediction(binId, payload) {
     estimatedFullTime: estimatedFullTime || null,
     note: payload.note || null,
   };
+}
+
+function mlFailureNote(err) {
+  if (!err) return 'unknown_error';
+  if (err.code) return err.code;
+  if (err.response?.status) return `http_${err.response.status}`;
+  return err.message || 'unknown_error';
 }
 
 function toMlHistoryPoint(item) {
@@ -135,6 +142,7 @@ router.get('/predict/:binId', async (req, res) => {
     const binId = String(req.params.binId || '').trim();
     const container = await Container.findOne({ where: { qrCode: binId } });
     if (!container || !hasValidCoordinates(container)) {
+      console.warn(`Prediction rejected for binId=${binId}: container_not_found_or_invalid_coordinates`);
       return res.status(404).json({ error: 'Container not found' });
     }
 
@@ -150,6 +158,7 @@ router.get('/predict/:binId', async (req, res) => {
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
     if (history.length < 2) {
+      console.warn(`Prediction skipped for binId=${binId}: insufficient_history validPoints=${history.length}`);
       return res.json(emptyPrediction(binId, 'Insufficient telemetry history'));
     }
 
@@ -163,22 +172,18 @@ router.get('/predict/:binId', async (req, res) => {
       const response = await axios.post(
         `${mlConfig.url}/predict`,
         { binId, history },
-        {
-          timeout: mlConfig.timeoutMs,
-          headers: { 'x-internal-service': 'true' },
-          transitional: { clarifyTimeoutError: true },
-        }
+        getMlRequestOptions(mlConfig)
       );
 
       const prediction = normalizePrediction(binId, response.data);
       if (!prediction) {
-        console.warn(`Invalid ML response for binId=${binId}`);
+        console.warn(`Invalid ML response for binId=${binId}: keys=${Object.keys(response.data || {}).join(',')}`);
         return res.json(emptyPrediction(binId, 'ML service unavailable'));
       }
 
       return res.json(prediction);
     } catch (err) {
-      console.warn(`ML prediction failed for binId=${binId}: ${err.code || err.message}`);
+      console.warn(`ML prediction failed for binId=${binId}: ${mlFailureNote(err)}`);
       return res.json(emptyPrediction(binId, 'ML service unavailable'));
     }
   } catch (err) {

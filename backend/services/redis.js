@@ -35,12 +35,17 @@ async function getDriverAvailable(driverId) {
 
 /** When Redis is off, allow telemetry (no in-memory limiter here). */
 async function checkTelemetryRateLimit(binId) {
-  if (!redisClient) return true;
+  if (!redisClient || !redisClient.isOpen) return true;
   const key = `ratelimit:telemetry:${binId}`;
-  const exists = await redisClient.get(key);
-  if (exists) return false;
-  await redisClient.setEx(key, 3, '1');
-  return true;
+  try {
+    const exists = await redisClient.get(key);
+    if (exists) return false;
+    await redisClient.setEx(key, 3, '1');
+    return true;
+  } catch (err) {
+    console.warn(`Telemetry rate limiter unavailable for qrCode=${binId}: ${err.message}`);
+    return true;
+  }
 }
 
 module.exports = {

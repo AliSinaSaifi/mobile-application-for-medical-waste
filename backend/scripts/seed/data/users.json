@@ -1,0 +1,117 @@
+{
+  "password": "MedWaste2026!",
+  "admins": [
+    {
+      "fullName": "Aigerim Sadykova",
+      "username": "admin_astana",
+      "email": "admin.astana@medwaste.kz",
+      "department": "Operations Command"
+    }
+  ],
+  "personnel": [
+    {
+      "fullName": "Daniyar Omarov",
+      "username": "ops_daniyar",
+      "email": "daniyar.omarov@medwaste.kz",
+      "department": "City Dispatch"
+    },
+    {
+      "fullName": "Madina Ibrayeva",
+      "username": "qa_madina",
+      "email": "madina.ibrayeva@medwaste.kz",
+      "department": "Compliance"
+    }
+  ],
+  "drivers": [
+    {
+      "fullName": "Nurlan Beketov",
+      "username": "driver_nurlan",
+      "email": "nurlan.beketov@medwaste.kz",
+      "licenseNumber": "KZ-DL-781245",
+      "licenseExpiry": "2029-04-20",
+      "company": "Astana Medical Logistics",
+      "plateNumber": "101AZA01",
+      "vehicleModel": "Mercedes-Benz Sprinter",
+      "vehicleYear": 2021,
+      "capacity": 1200,
+      "lastLat": 51.1286,
+      "lastLon": 71.4302
+    },
+    {
+      "fullName": "Arman Tulegenov",
+      "username": "driver_arman",
+      "email": "arman.tulegenov@medwaste.kz",
+      "licenseNumber": "KZ-DL-449812",
+      "licenseExpiry": "2028-10-15",
+      "company": "EcoMed Transit",
+      "plateNumber": "222BBA01",
+      "vehicleModel": "Ford Transit",
+      "vehicleYear": 2020,
+      "capacity": 1000,
+      "lastLat": 51.1608,
+      "lastLon": 71.4701
+    },
+    {
+      "fullName": "Serik Aitbayev",
+      "username": "driver_serik",
+      "email": "serik.aitbayev@medwaste.kz",
+      "licenseNumber": "KZ-DL-903144",
+      "licenseExpiry": "2030-02-11",
+      "company": "MedWaste Fleet",
+      "plateNumber": "303CCA01",
+      "vehicleModel": "Volkswagen Crafter",
+      "vehicleYear": 2022,
+      "capacity": 1400,
+      "lastLat": 51.1102,
+      "lastLon": 71.4164
+    },
+    {
+      "fullName": "Bolat Rakhimov",
+      "username": "driver_bolat",
+      "email": "bolat.rakhimov@medwaste.kz",
+      "licenseNumber": "KZ-DL-557701",
+      "licenseExpiry": "2027-09-05",
+      "company": "Astana Sanitary Transport",
+      "plateNumber": "404DDA01",
+      "vehicleModel": "Hyundai H350",
+      "vehicleYear": 2019,
+      "capacity": 900,
+      "lastLat": 51.1397,
+      "lastLon": 71.3988
+    }
+  ],
+  "utilizers": [
+    {
+      "fullName": "Gulnar Tasmagambetova",
+      "username": "utilizer_north",
+      "email": "north.station@medwaste.kz",
+      "stationName": "Astana North Medical Waste Utilization Station",
+      "stationAddress": "Industrial Zone, 12 A184 Street, Astana",
+      "stationLat": 51.2034,
+      "stationLon": 71.4558,
+      "licenseNumber": "UTL-AST-2026-001",
+      "licenseExpiry": "2031-12-31",
+      "wasteTypes": ["A", "B", "C"],
+      "capacity": 4500,
+      "method": "incineration",
+      "contactName": "Gulnar Tasmagambetova",
+      "contactPhone": "+77011234501"
+    },
+    {
+      "fullName": "Askar Yessenov",
+      "username": "utilizer_south",
+      "email": "south.station@medwaste.kz",
+      "stationName": "Astana South Sterilization Center",
+      "stationAddress": "Korgalzhyn Highway 34, Astana",
+      "stationLat": 51.0846,
+      "stationLon": 71.3867,
+      "licenseNumber": "UTL-AST-2026-002",
+      "licenseExpiry": "2030-08-18",
+      "wasteTypes": ["A", "B", "D"],
+      "capacity": 3800,
+      "method": "autoclave",
+      "contactName": "Askar Yessenov",
+      "contactPhone": "+77011234502"
+    }
+  ]
+}

@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 // Stored in MongoDB for analytics, audit trail, and reporting
 const disposalLogSchema = new mongoose.Schema({
   taskId:      { type: Number, required: true },   // FK to PostgreSQL Task.id
-  containerId: { type: Number, required: true },
+  containerId: { type: String, required: true },
   driverId:    { type: Number, required: true },
   utilizerId:  { type: Number, required: true },
   wasteType:   { type: String, enum: ['A', 'B', 'C', 'D'] },

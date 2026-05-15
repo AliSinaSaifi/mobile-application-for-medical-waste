@@ -1,0 +1,21 @@
+{
+  "count": 60,
+  "prefix": "AST-MED",
+  "locations": [
+    { "name": "National Research Cardiac Surgery Center", "lat": 51.1082, "lon": 71.4115, "department": "Cardiology" },
+    { "name": "University Medical Center Mother and Child", "lat": 51.1075, "lon": 71.4082, "department": "Maternity" },
+    { "name": "National Neurosurgery Center", "lat": 51.1098, "lon": 71.4058, "department": "Neurosurgery" },
+    { "name": "Astana City Hospital No. 1", "lat": 51.1578, "lon": 71.4645, "department": "Surgery" },
+    { "name": "Astana Medical University Clinic", "lat": 51.1642, "lon": 71.4285, "department": "Education Clinic" },
+    { "name": "Kazakh Research Institute of Oncology Astana", "lat": 51.1042, "lon": 71.415, "department": "Oncology" },
+    { "name": "City Polyclinic No. 2", "lat": 51.1451, "lon": 71.4214, "department": "Outpatient" },
+    { "name": "City Polyclinic No. 5", "lat": 51.1337, "lon": 71.4892, "department": "Diagnostics" },
+    { "name": "Presidential Medical Center Hospital", "lat": 51.1295, "lon": 71.4469, "department": "Executive Clinic" },
+    { "name": "Railway Hospital Astana", "lat": 51.1732, "lon": 71.4128, "department": "Emergency" },
+    { "name": "City Children's Hospital No. 2", "lat": 51.1194, "lon": 71.4731, "department": "Pediatrics" },
+    { "name": "Astana Infectious Diseases Hospital", "lat": 51.1891, "lon": 71.4512, "department": "Infectious Disease" },
+    { "name": "Central Dental Clinic Astana", "lat": 51.1505, "lon": 71.4384, "department": "Dental" },
+    { "name": "Republican Diagnostic Center", "lat": 51.111, "lon": 71.4055, "department": "Diagnostics" },
+    { "name": "Traumatology and Orthopedics Research Institute", "lat": 51.1364, "lon": 71.4103, "department": "Trauma" }
+  ]
+}

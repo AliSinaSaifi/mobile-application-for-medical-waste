@@ -1,0 +1,8 @@
+{
+  "minPointsPerContainer": 42,
+  "maxPointsPerContainer": 96,
+  "daysBack": 21,
+  "criticalRatio": 0.22,
+  "recentlyEmptiedRatio": 0.18,
+  "warningRatio": 0.25
+}

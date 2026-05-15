@@ -8,7 +8,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "dev:backend": "npm --prefix backend run dev",
-    "start:backend": "npm --prefix backend run start"
+    "start:backend": "npm --prefix backend run start",
+    "seed:postgres": "npm --prefix backend run seed:postgres",
+    "seed:mongo": "npm --prefix backend run seed:mongo",
+    "seed:all": "npm --prefix backend run seed:all",
+    "seed:clear": "npm --prefix backend run seed:clear"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.3",

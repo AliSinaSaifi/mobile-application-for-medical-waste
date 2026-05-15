@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -33,7 +33,7 @@ class PredictionRequest(BaseModel):
                 normalized.append(
                     {
                         "fullness": fullness,
-                        "timestamp": datetime.fromtimestamp(float(timestamp)).isoformat(),
+                        "timestamp": datetime.fromtimestamp(float(timestamp), tz=timezone.utc).isoformat(),
                     }
                 )
 

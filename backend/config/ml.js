@@ -1,4 +1,6 @@
 const DEFAULT_ML_TIMEOUT_MS = 5000;
+const http = require('http');
+const https = require('https');
 
 function getMlConfig() {
   const rawUrl = String(process.env.ML_SERVICE_URL || '').trim();
@@ -46,7 +48,24 @@ function logMlStatus() {
   }
 }
 
+function getMlRequestOptions(config) {
+  if (!config?.enabled || !config.url) return {};
+
+  const parsed = new URL(config.url);
+  const forceIpv4 = ['localhost', '127.0.0.1'].includes(parsed.hostname);
+  const agentOptions = forceIpv4 ? { family: 4 } : {};
+
+  return {
+    timeout: config.timeoutMs,
+    headers: { 'x-internal-service': 'true' },
+    transitional: { clarifyTimeoutError: true },
+    httpAgent: parsed.protocol === 'http:' ? new http.Agent(agentOptions) : undefined,
+    httpsAgent: parsed.protocol === 'https:' ? new https.Agent(agentOptions) : undefined,
+  };
+}
+
 module.exports = {
   getMlConfig,
+  getMlRequestOptions,
   logMlStatus,
 };

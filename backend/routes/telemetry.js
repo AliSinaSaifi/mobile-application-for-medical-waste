@@ -18,10 +18,12 @@ router.post('/', async (req, res) => {
     console.log(`Telemetry received: ${binId} = ${fullness}%`);
 
     if (!binId || req.body.fullness === undefined) {
+      console.warn('Telemetry rejected: missing binId or fullness');
       return res.status(400).json({ error: 'binId and fullness are required' });
     }
 
     if (!Number.isFinite(fullness) || fullness < 0 || fullness > 100) {
+      console.warn(`Telemetry rejected for qrCode=${binId || 'unknown'}: invalid_fullness value=${req.body.fullness}`);
       return res.status(400).json({ error: 'fullness must be a number between 0 and 100' });
     }
 
@@ -37,10 +39,14 @@ router.post('/', async (req, res) => {
     }
 
     const allowed = await checkTelemetryRateLimit(binId);
-    if (!allowed) return res.status(429).json({ message: 'Rate limited' });
+    if (!allowed) {
+      console.warn(`Telemetry rejected for qrCode=${binId}: rate_limited`);
+      return res.status(429).json({ message: 'Rate limited' });
+    }
 
     const entry = await new History({ binId, fullness }).save();
     emitTelemetry(binId, fullness, entry.timestamp);
+    console.log(`Telemetry stored: ${binId} fullness=${fullness} timestamp=${entry.timestamp.toISOString()}`);
 
     if (fullness >= 80) {
       const existingAlert = await Alert.findOne({ containerId: binId, resolved: false });
