@@ -97,6 +97,65 @@ async function ensureUserProfileColumns() {
   });
 }
 
+async function ensureContainerIntegrity() {
+  if (!sequelize) return;
+
+  const queryInterface = sequelize.getQueryInterface();
+
+  const addIndexIfMissing = async (fields, options) => {
+    try {
+      await queryInterface.addIndex('containers', fields, options);
+      console.log(`Created index ${options.name}`);
+    } catch (err) {
+      if (!/already exists|exists/i.test(err.message)) {
+        console.warn(`Could not create index ${options.name}:`, err.message);
+      }
+    }
+  };
+
+  await addIndexIfMissing(['qrCode'], { name: 'containers_qr_code_unique_idx', unique: true });
+  await addIndexIfMissing(['lat', 'lon'], { name: 'containers_lat_lon_idx' });
+
+  await sequelize.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'containers_lat_range_chk') THEN
+        ALTER TABLE containers
+          ADD CONSTRAINT containers_lat_range_chk
+          CHECK (lat IS NULL OR (lat >= -90 AND lat <= 90));
+      END IF;
+
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'containers_lon_range_chk') THEN
+        ALTER TABLE containers
+          ADD CONSTRAINT containers_lon_range_chk
+          CHECK (lon IS NULL OR (lon >= -180 AND lon <= 180));
+      END IF;
+    END $$;
+  `);
+
+  const [[invalid]] = await sequelize.query(`
+    SELECT COUNT(*)::int AS count
+    FROM containers
+    WHERE lat IS NULL
+       OR lon IS NULL
+       OR lat < -90
+       OR lat > 90
+       OR lon < -180
+       OR lon > 180;
+  `);
+
+  if (invalid.count > 0) {
+    console.warn(`containers table has ${invalid.count} row(s) with missing/invalid coordinates`);
+    return;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    await sequelize.query('ALTER TABLE containers ALTER COLUMN lat SET NOT NULL;');
+    await sequelize.query('ALTER TABLE containers ALTER COLUMN lon SET NOT NULL;');
+    console.log('Enforced NOT NULL on containers.lat/lon');
+  }
+}
+
 async function connectPostgres() {
   if (!sequelize) {
     console.warn('⚠️  POSTGRES_URI/DATABASE_URL not set — PostgreSQL is disabled');
@@ -106,6 +165,7 @@ async function connectPostgres() {
     await sequelize.authenticate();
     await sequelize.sync({ alter: false });
     await ensureUserProfileColumns();
+    await ensureContainerIntegrity();
     console.log('✅ PostgreSQL connected');
   } catch (err) {
     console.error('❌ PostgreSQL Error:', err.message);

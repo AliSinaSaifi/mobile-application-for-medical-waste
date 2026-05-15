@@ -5,6 +5,8 @@ const { createCorsOriginCallback } = require('../config/cors');
 const SECRET = process.env.JWT_SECRET;
 
 let io;
+const telemetryEmitState = new Map();
+const TELEMETRY_EMIT_MIN_INTERVAL_MS = Number(process.env.TELEMETRY_SOCKET_THROTTLE_MS) || 1000;
 
 function initSocket(httpServer, options = {}) {
   const allowedOrigins = options.allowedOrigins || [];
@@ -55,7 +57,26 @@ function initSocket(httpServer, options = {}) {
 
 function emitTelemetry(binId, fullness, timestamp) {
   if (!io) return;
-  io.emit('telemetry:update', { binId, fullness, timestamp });
+  const key = String(binId);
+  const now = Date.now();
+  const last = telemetryEmitState.get(key);
+  const payload = { binId, fullness, timestamp };
+
+  if (last && now - last.emittedAt < TELEMETRY_EMIT_MIN_INTERVAL_MS) {
+    if (last.timeout) clearTimeout(last.timeout);
+    const delay = TELEMETRY_EMIT_MIN_INTERVAL_MS - (now - last.emittedAt);
+    const timeout = setTimeout(() => {
+      const state = telemetryEmitState.get(key);
+      if (!state?.payload) return;
+      telemetryEmitState.set(key, { emittedAt: Date.now(), payload: null, timeout: null });
+      io.emit('telemetry:update', state.payload);
+    }, delay);
+    telemetryEmitState.set(key, { emittedAt: last.emittedAt, payload, timeout });
+    return;
+  }
+
+  telemetryEmitState.set(key, { emittedAt: now, payload: null, timeout: null });
+  io.emit('telemetry:update', payload);
 }
 
 function emitAlert(alert) {

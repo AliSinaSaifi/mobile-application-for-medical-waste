@@ -3,6 +3,7 @@ const Task      = require('../models/pg/Task');
 const Container = require('../models/pg/Container');
 const Driver = require('../models/pg/Driver');
 const { sendTaskAssignedEmail } = require('./email');
+const { hasValidCoordinates, isValidLatitude, isValidLongitude } = require('../utils/containerValidation');
 
 function haversine(lat1, lon1, lat2, lon2) {
   const R    = 6371;
@@ -29,9 +30,9 @@ async function autoAssignDriver(containerId, fullness = 0) {
   }
 
   let chosen = drivers[0];
-  if (container.lat && container.lon) {
+  if (hasValidCoordinates(container)) {
     const withDistance = drivers
-      .filter(d => d.lastLat && d.lastLon)
+      .filter(d => isValidLatitude(d.lastLat) && isValidLongitude(d.lastLon))
       .map(d => ({
         driver: d,
         dist:   haversine(d.lastLat, d.lastLon, container.lat, container.lon),
@@ -51,7 +52,7 @@ async function autoAssignDriver(containerId, fullness = 0) {
 
   const task = await Task.create({
     containerId: container.qrCode,
-    driverId:    driverRecord.id,
+    driverId:    chosen.id,
     status:      'assigned',
     assignedAt:  new Date(),
   });

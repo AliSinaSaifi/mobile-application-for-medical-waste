@@ -113,15 +113,10 @@ router.post('/assign-task', async (req, res) => {
       return res.status(400).json({ error: 'Driver is not approved' });
     }
 
-    // Ensure container exists in PostgreSQL for tasks FK relation.
-    await Container.findOrCreate({
-      where: { qrCode: normalizedContainerId },
-      defaults: {
-        qrCode: normalizedContainerId,
-        wasteType: 'A',
-        location: 'Auto-created from alert assignment',
-      },
-    });
+    const container = await Container.findOne({ where: { qrCode: normalizedContainerId } });
+    if (!container) {
+      return res.status(404).json({ error: 'Container must exist before assigning a task' });
+    }
 
     // Task.driverId references users.id, so use driver's linked userId.
     const newTask = await Task.create({

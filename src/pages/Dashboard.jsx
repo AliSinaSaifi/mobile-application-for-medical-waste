@@ -208,14 +208,15 @@ function StatCard({ title, value, delta, deltaType = "neu", subtitle, forecast, 
   );
 }
 
-function PredCard({ binId, pred }) {
+function PredCard({ bin, pred }) {
+  const binId = bin.qrCode || bin._id;
   const formatTs = (ts) => ts ? new Date(ts * 1000).toLocaleString() : "—";
   return (
     <div className="db-pred-card">
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
         <div>
           <div className="db-pred-id">{binId}</div>
-          <div className="db-pred-meta">Auto Registered • Sharp Medical Waste</div>
+          <div className="db-pred-meta">{bin.locationName || "—"} • {bin.wasteType || "—"}</div>
         </div>
         <span className="db-badge db-badge-green">Live</span>
       </div>
@@ -225,7 +226,7 @@ function PredCard({ binId, pred }) {
       </div>
       <div className="db-pred-row">
         <span className="db-pred-row-label">Hours until full:</span>
-        <span className="db-pred-row-val">{pred?.hours_until_full ?? "—"}h</span>
+        <span className="db-pred-row-val">{pred?.hours_until_full ?? "—"}{pred?.hours_until_full != null ? "h" : ""}</span>
       </div>
       {pred?.note && (
         <div style={{ fontSize:"0.7rem", color:"#F59E0B", marginTop:4 }}>⚠ {pred.note}</div>
@@ -233,7 +234,7 @@ function PredCard({ binId, pred }) {
       <div className="db-pred-confidence">
         <div className="db-pred-row">
           <span className="db-pred-row-label">Confidence:</span>
-          <span className="db-pred-row-val" style={{ color:"#1A6EFF" }}>{pred?.confidence ?? 0}%</span>
+          <span className="db-pred-row-val" style={{ color:"#1A6EFF" }}>{pred?.confidence ?? "—"}{pred?.confidence != null ? "%" : ""}</span>
         </div>
         <div className="db-pred-conf-bar">
           <div className="db-pred-conf-fill" style={{ width:`${pred?.confidence ?? 0}%` }} />
@@ -275,12 +276,22 @@ function Dashboard() {
   // ── Derived stats from REAL bin data ──────────────────────
   const totalBins   = bins.length;
   const avgFullness = bins.length
-    ? Math.round(bins.reduce((s, b) => s + b.fullness, 0) / bins.length)
+    ? Math.round(bins.reduce((s, b) => s + (Number(b.fullness) || 0), 0) / bins.length)
     : 0;
-  const critical    = bins.filter(b => b.fullness >= 80).length;
-  const avgConf     = Object.values(predictions).length
-    ? Math.round(Object.values(predictions).reduce((s, p) => s + (p?.confidence ?? 0), 0) / Object.values(predictions).length)
+  const critical    = bins.filter(b => (Number(b.fullness) || 0) >= 80).length;
+  const predictionValues = Object.values(predictions).filter((p) => p?.confidence != null);
+  const avgConf     = predictionValues.length
+    ? Math.round(predictionValues.reduce((s, p) => s + (Number(p.confidence) || 0), 0) / predictionValues.length)
     : 0;
+  const wasteTypes = Object.values(bins.reduce((acc, bin) => {
+    const key = bin.wasteType || "Unknown";
+    acc[key] = acc[key] || { name: key, count: 0 };
+    acc[key].count += 1;
+    return acc;
+  }, {})).map((entry) => ({
+    ...entry,
+    pct: totalBins ? Math.round((entry.count / totalBins) * 100) : 0,
+  }));
 
   // ── Fetch all data ─────────────────────────────────────────
   const fetchAll = async () => {
@@ -337,7 +348,8 @@ function Dashboard() {
     setBins(prev => {
       const exists = prev.find(b => b._id === binId);
       if (exists) return prev.map(b => b._id === binId ? { ...b, fullness } : b);
-      return [...prev, { _id: binId, fullness }]; // new bin
+      fetchAll();
+      return prev;
     });
   },
  
@@ -371,10 +383,17 @@ useEffect(() => {
   const handleLogout = () => { sessionStorage.clear(); navigate("/login"); };
   const toggleSetting = (key) => setSettings(s => ({ ...s, [key]: !s[key] }));
 
-  // Bar heights from real bin data (or fallback)
-  const barHeights = bins.length
-    ? bins.map(b => b.fullness)
-    : [30, 55, 45, 70, 60, 80, 51, 65, 40, 58, 72, 51];
+  const barHeights = bins.map(b => Number(b.fullness) || 0);
+  const wasteTypeColors = ["#1A6EFF", "#00D68F", "#F59E0B", "#8B5CF6"];
+  const wasteDonutBackground = wasteTypes.length
+    ? `conic-gradient(${wasteTypes.reduce((parts, waste, index) => {
+        const start = wasteTypes.slice(0, index).reduce((sum, item) => sum + item.pct, 0) * 3.6;
+        const end = start + waste.pct * 3.6;
+        parts.push(`${wasteTypeColors[index % wasteTypeColors.length]} ${start}deg ${end}deg`);
+        return parts;
+      }, []).join(", ")})`
+    : "conic-gradient(#e4e9f0 0deg 360deg)";
+  const primaryWaste = wasteTypes[0] || { name: "—", pct: 0 };
 
   return (
     <>
@@ -481,23 +500,29 @@ useEffect(() => {
                 <span className="db-card-title">Waste Types</span>
               </div>
               <div className="db-donut-wrap">
-                <div className="db-donut" style={{ background:`conic-gradient(#1A6EFF 0deg 360deg, #e4e9f0 360deg)` }}>
+                <div className="db-donut" style={{ background: wasteDonutBackground }}>
                   <div className="db-donut-inner">
-                    <div className="db-donut-pct">100%</div>
-                    <div className="db-donut-sub">Sharp</div>
+                    <div className="db-donut-pct">{primaryWaste.pct}%</div>
+                    <div className="db-donut-sub">{primaryWaste.name}</div>
                   </div>
                 </div>
                 <div className="db-waste-types">
-                  <div className="db-waste-row">
-                    <div className="db-waste-label">
-                      <div className="db-waste-dot" style={{ background:"#1A6EFF" }} />
-                      <span style={{ fontSize:"0.78rem" }}>Sharp Medical Waste</span>
+                  {wasteTypes.length === 0 ? (
+                    <div style={{ fontSize:"0.78rem", color:"#5e6a85" }}>No waste type data</div>
+                  ) : wasteTypes.map((waste, index) => (
+                    <div key={waste.name}>
+                      <div className="db-waste-row">
+                        <div className="db-waste-label">
+                          <div className="db-waste-dot" style={{ background:wasteTypeColors[index % wasteTypeColors.length] }} />
+                          <span style={{ fontSize:"0.78rem" }}>{waste.name}</span>
+                        </div>
+                        <span className="db-waste-pct">{waste.pct}%</span>
+                      </div>
+                      <div className="db-waste-bar-wrap">
+                        <div className="db-waste-bar-fill" style={{ width:`${waste.pct}%`, background:wasteTypeColors[index % wasteTypeColors.length] }} />
+                      </div>
                     </div>
-                    <span className="db-waste-pct">100%</span>
-                  </div>
-                  <div className="db-waste-bar-wrap">
-                    <div className="db-waste-bar-fill" style={{ width:"100%", background:"#1A6EFF" }} />
-                  </div>
+                  ))}
                   <div style={{ fontSize:"0.72rem", color:"#5e6a85", marginTop:4 }}>
                     {totalBins} bins · {avgFullness}% avg filled
                   </div>
@@ -526,7 +551,7 @@ useEffect(() => {
             ) : (
               <div className="db-predictions-grid">
                 {bins.slice(0,6).map(bin => (
-                  <PredCard key={bin._id} binId={bin._id} pred={predictions[bin._id]} />
+                  <PredCard key={bin._id} bin={bin} pred={predictions[bin._id]} />
                 ))}
               </div>
             )}

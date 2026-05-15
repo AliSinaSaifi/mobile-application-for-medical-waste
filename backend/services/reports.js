@@ -78,8 +78,8 @@ function buildSequelizeDateFilter(field, dateRange) {
 
 function getDepartment(container) {
   const location = String(container.location || '').trim();
-  if (!location || location.toLowerCase().includes('auto-created')) return 'Auto Registered';
-  return location.split(',')[0].trim() || 'Auto Registered';
+  if (!location || location.toLowerCase().includes('auto-created')) return 'Unassigned';
+  return location.split(',')[0].trim() || 'Unassigned';
 }
 
 function toPercent(value) {

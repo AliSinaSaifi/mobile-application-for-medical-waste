@@ -1,28 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { exportReports, getReports } from "../services/api";
 
-const departments = [
-  {
-    name: "Auto Registered",
-    bins: 5,
-    avgFullness: 51,
-    totalWeight: 0.0,
-    needsAttention: 1,
-  },
+const emptyKpis = [
+  { label: "Total Containers", val: "—", sub: "Active in the system" },
+  { label: "Average Fullness", val: "—", sub: "Average fill level" },
+  { label: "Need Attention", val: "—", sub: "Containers requiring action" },
+  { label: "Total Weight", val: "—", sub: "Total waste weight" },
 ];
-
-const barData = [
-  { label: "Auto Registered", fullness: 51, count: 5, weight: 0 },
-];
-
-const defaultKpis = [
-  { label: "Total Containers", val: "5", sub: "Active in the system" },
-  { label: "Average Fullness", val: "51%", sub: "Average fill level" },
-  { label: "Need Attention", val: "0", sub: "Containers requiring action" },
-  { label: "Total Weight", val: "0.0 kg", sub: "Total waste weight" },
-];
-
-const defaultWasteTypes = [{ name: "Sharp Medical Waste", pct: 100, color: "#1A6EFF" }];
 
 const css = `
   
@@ -156,10 +140,10 @@ function Reports() {
   const [period, setPeriod]           = useState("");
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState("");
-  const [kpis, setKpis]               = useState(defaultKpis);
-  const [departmentRows, setDepartmentRows] = useState(departments);
-  const [departmentBars, setDepartmentBars] = useState(barData);
-  const [wasteTypes, setWasteTypes]   = useState(defaultWasteTypes);
+  const [kpis, setKpis]               = useState(emptyKpis);
+  const [departmentRows, setDepartmentRows] = useState([]);
+  const [departmentBars, setDepartmentBars] = useState([]);
+  const [wasteTypes, setWasteTypes]   = useState([]);
 
   const params = useMemo(() => ({
     reportType,
@@ -185,6 +169,10 @@ function Reports() {
       setWasteTypes(data.wasteTypeDistribution?.length ? data.wasteTypeDistribution : []);
     } catch (err) {
       setError(err.response?.data?.error || err.message || "Unable to load reports");
+      setKpis(emptyKpis);
+      setDepartmentRows([]);
+      setDepartmentBars([]);
+      setWasteTypes([]);
     } finally {
       setLoading(false);
     }
@@ -296,7 +284,11 @@ function Reports() {
             {[0, 20, 40, 60, 80, 100].map(v => <span key={v}>{v}</span>)}
           </div>
           <div className="rp-chart-wrap">
-            {departmentBars.map((d) => (
+            {departmentBars.length === 0 ? (
+              <div style={{ padding: 20, color: "#a0aec0", textAlign: "center" }}>
+                {loading ? "Loading report data..." : "No department data available."}
+              </div>
+            ) : departmentBars.map((d) => (
               <div className="rp-chart-row" key={d.label}>
                 <div className="rp-chart-dept">{d.label}</div>
                 <div className="rp-chart-bars">
@@ -304,7 +296,7 @@ function Reports() {
                     <div className="rp-chart-fill" style={{ width: `${d.fullness}%`, background: "linear-gradient(90deg,#1A6EFF,#00D68F)" }} />
                   </div>
                   <div className="rp-chart-track">
-                    <div className="rp-chart-fill" style={{ width: `${d.countPct ?? (d.count / 10) * 100}%`, background: "#8B5CF6" }} />
+                    <div className="rp-chart-fill" style={{ width: `${d.countPct ?? 0}%`, background: "#8B5CF6" }} />
                   </div>
                   <div className="rp-chart-track">
                     <div className="rp-chart-fill" style={{ width: `${d.weight}%`, background: "#F59E0B" }} />
@@ -332,7 +324,11 @@ function Reports() {
               </div>
             </div>
             <div className="rp-waste-list">
-              {wasteTypes.map((w) => (
+              {wasteTypes.length === 0 ? (
+                <div style={{ color: "#a0aec0", fontSize: "0.85rem" }}>
+                  {loading ? "Loading waste type data..." : "No waste type data available."}
+                </div>
+              ) : wasteTypes.map((w) => (
                 <div className="rp-waste-row" key={w.name}>
                   <div className="rp-waste-dot" style={{ background: w.color }} />
                   <span className="rp-waste-name">{w.name} ({w.pct}%)</span>
@@ -360,7 +356,13 @@ function Reports() {
               </tr>
             </thead>
             <tbody>
-              {departmentRows.map((dep) => (
+              {departmentRows.length === 0 ? (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: "center", color: "#a0aec0", padding: 24 }}>
+                    {loading ? "Loading department statistics..." : "No department statistics available."}
+                  </td>
+                </tr>
+              ) : departmentRows.map((dep) => (
                 <tr key={dep.name}>
                   <td style={{ fontWeight: 600 }}>{dep.name}</td>
                   <td>{dep.bins}</td>

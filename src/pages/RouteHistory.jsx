@@ -18,7 +18,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl:     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-const mockRoutes = []; // no routes yet
 const defaultKpis = {
   totalRoutes: 0,
   completed: 0,
@@ -171,7 +170,7 @@ function RouteHistory() {
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [period, setPeriod]   = useState("all");
   const [status, setStatus]   = useState("all");
-  const [routes, setRoutes]   = useState(mockRoutes);
+  const [routes, setRoutes]   = useState([]);
   const [kpis, setKpis]       = useState(defaultKpis);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
@@ -233,7 +232,7 @@ function RouteHistory() {
     () => samplePoints(selectedCoordinates, MAX_MARKERS),
     [selectedCoordinates]
   );
-  const mapCenter = selectedCoordinates[0] || [51.1283, 71.4305];
+  const mapCenter = selectedCoordinates[0];
 
   useSocket({
     "route:point": (update) => {

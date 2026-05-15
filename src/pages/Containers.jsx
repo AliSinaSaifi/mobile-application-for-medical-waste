@@ -201,7 +201,8 @@ const css = `
     setBins(prev => {
       const exists = prev.find(b => b._id === binId);
       if (exists) return prev.map(b => b._id === binId ? { ...b, fullness, timestamp } : b);
-      return [...prev, { _id: binId, fullness, timestamp }];
+      fetchBins();
+      return prev;
     });
   },
 });
@@ -268,17 +269,17 @@ const css = `
                       {status.label}
                     </span>
                   </div>
-                  <div className="ct-card-sub">Sharp Medical Waste • ID: {bin._id}</div>
+                  <div className="ct-card-sub">{bin.wasteType || "—"} • ID: {bin._id}</div>
 
                   <div className="ct-fullness-header">
                     <span>Current Fullness</span>
-                    <span className="ct-fullness-val">{bin.fullness.toFixed(1)}%</span>
+                    <span className="ct-fullness-val">{Number(bin.fullness ?? 0).toFixed(1)}%</span>
                   </div>
                   <div className="ct-bar-track">
                     <div
                       className="ct-bar-fill"
                       style={{ 
-                        width: `${bin.fullness}%`, 
+                        width: `${Number(bin.fullness ?? 0)}%`, 
                         background: status.color 
                       }}
                     />
@@ -286,19 +287,19 @@ const css = `
 
                   <div className="ct-stats-row">
                     <div className="ct-stat">
-                      <div className="ct-stat-val">24°C</div>
+                      <div className="ct-stat-val">{bin.temperature ?? "—"}</div>
                       <div className="ct-stat-label">Temperature</div>
                     </div>
                     <div className="ct-stat">
-                      <div className="ct-stat-val">{(bin.fullness * 0.4).toFixed(1)} kg</div>
+                      <div className="ct-stat-val">{bin.weightKg != null ? `${Number(bin.weightKg).toFixed(1)} kg` : "—"}</div>
                       <div className="ct-stat-label">Est. Weight</div>
                     </div>
                   </div>
 
                   <div className="ct-card-footer">
-                    <span className="ct-type-badge">Type A</span>
+                    <span className="ct-type-badge">{bin.wasteType ? `Type ${bin.wasteType}` : "—"}</span>
                     <span className="ct-date">
-                      Last: {new Date(bin.timestamp).toLocaleTimeString()}
+                      Last: {bin.timestamp ? new Date(bin.timestamp).toLocaleTimeString() : "—"}
                     </span>
                   </div>
                 </div>

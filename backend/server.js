@@ -6,6 +6,7 @@ const { assertJwtConfigured } = require('./config/jwtEnv');
 assertJwtConfigured();
 
 const { connectPostgres, connectMongo, connectRedis } = require('./config/db');
+const { logMlStatus } = require('./config/ml');
 const { initSocket } = require('./services/Socket');
 const {
   DEFAULT_ALLOWED_ORIGINS,
@@ -72,6 +73,8 @@ const PORT = Number(process.env.PORT) || 5000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 async function start() {
+  logMlStatus();
+
   if (isEnabled(process.env.ENABLE_POSTGRES, true)) {
     await connectPostgres();
   }
