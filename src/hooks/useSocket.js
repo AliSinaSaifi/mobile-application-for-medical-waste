@@ -24,13 +24,14 @@ export function useSocket(handlers = {}) {
     const socket = sharedSocket;
 
     // Register all handlers passed in
-    const events = Object.keys(handlersRef.current);
-    events.forEach(event => {
-      socket.on(event, (...args) => handlersRef.current[event]?.(...args));
+    const listeners = Object.keys(handlersRef.current).map(event => {
+      const listener = (...args) => handlersRef.current[event]?.(...args);
+      socket.on(event, listener);
+      return { event, listener };
     });
 
     return () => {
-      events.forEach(event => socket.off(event));
+      listeners.forEach(({ event, listener }) => socket.off(event, listener));
     };
   }, []);
 }
@@ -41,4 +42,8 @@ export function disconnectSocket() {
     sharedSocket.disconnect();
     sharedSocket = null;
   }
+}
+
+export function getSharedSocket() {
+  return sharedSocket;
 }

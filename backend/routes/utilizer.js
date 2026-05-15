@@ -5,6 +5,7 @@ const Container   = require('../models/pg/Container');
 const DisposalLog = require('../models/mongo/DisposalLog');
 const History     = require('../models/mongo/History');
 const { authenticate } = require('../middleware/auth');
+const { emitRouteStatus } = require('../services/Socket');
 
 router.use(authenticate);
 
@@ -40,6 +41,12 @@ router.patch('/accept-waste/:taskId', async (req, res) => {
     }
 
     await task.update({ status: 'at_utilization', arrivedAt: new Date() });
+    emitRouteStatus(task.id, {
+      routeId: task.id,
+      taskId: task.id,
+      status: 'active',
+      rawStatus: task.status,
+    });
     res.json({ message: 'Waste accepted for processing', task });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -64,6 +71,12 @@ router.patch('/complete-process/:taskId', async (req, res) => {
 
     // 1. Update task in PostgreSQL
     await task.update({ status: 'completed', completedAt: new Date() });
+    emitRouteStatus(task.id, {
+      routeId: task.id,
+      taskId: task.id,
+      status: 'completed',
+      rawStatus: task.status,
+    });
 
     // 2. Free up driver and utilizer in PostgreSQL
     await User.update({ isAvailable: true }, { where: { id: task.driverId } });

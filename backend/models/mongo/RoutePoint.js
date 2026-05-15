@@ -14,5 +14,6 @@ const routePointSchema = new mongoose.Schema({
 
 routePointSchema.index({ taskId: 1, timestamp: 1 });
 routePointSchema.index({ routeId: 1, timestamp: 1 });
+routePointSchema.index({ driverId: 1, timestamp: -1 });
 
 module.exports = mongoose.model('RoutePoint', routePointSchema);

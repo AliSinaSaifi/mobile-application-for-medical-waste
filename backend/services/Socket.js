@@ -30,13 +30,23 @@ function initSocket(httpServer, options = {}) {
 
   io.on('connection', (socket) => {
     const { userId, role } = socket.user;
-    console.log(`🔌 Connected: userId=${userId} role=${role}`);
+    console.log(`Socket connected: userId=${userId} role=${role}`);
 
     socket.join(`role:${role}`);
     socket.join(`user:${userId}`);
 
+    socket.on('route:subscribe', (routeId) => {
+      const id = Number(routeId);
+      if (Number.isInteger(id) && id > 0) socket.join(`route:${id}`);
+    });
+
+    socket.on('route:unsubscribe', (routeId) => {
+      const id = Number(routeId);
+      if (Number.isInteger(id) && id > 0) socket.leave(`route:${id}`);
+    });
+
     socket.on('disconnect', () => {
-      console.log(`🔌 Disconnected: userId=${userId}`);
+      console.log(`Socket disconnected: userId=${userId}`);
     });
   });
 
@@ -63,6 +73,16 @@ function emitTaskUpdate(task) {
   io.to('role:admin').emit('task:updated', task);
 }
 
+function emitRoutePoint(routeId, payload) {
+  if (!io) return;
+  io.to(`route:${routeId}`).to('role:admin').to('role:personnel').emit('route:point', payload);
+}
+
+function emitRouteStatus(routeId, payload) {
+  if (!io) return;
+  io.to(`route:${routeId}`).to('role:admin').to('role:personnel').emit('route:status', payload);
+}
+
 function emitNotification(userId, notification) {
   if (!io) return;
   io.to(`user:${userId}`).emit('notification:new', notification);
@@ -74,5 +94,7 @@ module.exports = {
   emitAlert,
   emitTaskToDriver,
   emitTaskUpdate,
+  emitRoutePoint,
+  emitRouteStatus,
   emitNotification,
 };

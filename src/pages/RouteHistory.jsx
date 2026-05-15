@@ -8,6 +8,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import { getRouteHistory, getRouteHistoryDetail } from "../services/api";
+import { getSharedSocket, useSocket } from "../hooks/useSocket";
 
 // Leaflet icon fix
 delete L.Icon.Default.prototype._getIconUrl;
@@ -211,6 +212,59 @@ function RouteHistory() {
   const selectedCoordinates = selectedRoute?.coordinates || [];
   const mapCenter = selectedCoordinates[0] || [51.1283, 71.4305];
 
+  useSocket({
+    "route:point": (update) => {
+      if (!update?.routeId) return;
+      setRoutes((prev) => prev.map((route) => (
+        route.id === update.routeId
+          ? {
+              ...route,
+              coordinates: update.coordinates || route.coordinates || [],
+              distance: update.distance ?? route.distance,
+              status: update.status || route.status,
+              hasRealGpsPoints: true,
+              coordinateSource: "route_points",
+            }
+          : route
+      )));
+      setSelectedRoute((current) => (
+        current?.id === update.routeId
+          ? {
+              ...current,
+              coordinates: update.coordinates || current.coordinates || [],
+              distance: update.distance ?? current.distance,
+              status: update.status || current.status,
+              hasRealGpsPoints: true,
+              coordinateSource: "route_points",
+            }
+          : current
+      ));
+    },
+    "route:status": (update) => {
+      if (!update?.routeId) return;
+      setRoutes((prev) => prev.map((route) => (
+        route.id === update.routeId
+          ? { ...route, status: update.status || route.status, rawStatus: update.rawStatus || route.rawStatus }
+          : route
+      )));
+      setSelectedRoute((current) => (
+        current?.id === update.routeId
+          ? { ...current, status: update.status || current.status, rawStatus: update.rawStatus || current.rawStatus }
+          : current
+      ));
+    },
+  });
+
+  useEffect(() => {
+    const socket = getSharedSocket();
+    if (!socket || !selectedRoute?.id) return undefined;
+
+    socket.emit("route:subscribe", selectedRoute.id);
+    return () => {
+      socket.emit("route:unsubscribe", selectedRoute.id);
+    };
+  }, [selectedRoute?.id]);
+
   return (
     <>
       <style>{css}</style>
@@ -294,7 +348,7 @@ function RouteHistory() {
                       route.status === "cancelled" ? "rh-status-cancelled" : "rh-status-active"
                     }`}>
                       {route.status === "completed" ? "✓ Completed" :
-                       route.status === "cancelled" ? "✕ Cancelled" : "● Active"}
+                       route.status === "cancelled" ? "✕ Cancelled" : "● LIVE"}
                     </span>
                   </div>
                 ))

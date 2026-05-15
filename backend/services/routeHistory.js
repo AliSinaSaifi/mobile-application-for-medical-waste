@@ -6,6 +6,7 @@ const Container = require('../models/pg/Container');
 const Utilizer = require('../models/pg/Utilizer');
 const DisposalLog = require('../models/mongo/DisposalLog');
 const RoutePoint = require('../models/mongo/RoutePoint');
+const { emitRoutePoint } = require('./Socket');
 
 const STATUS_MAP = {
   assigned: 'active',
@@ -102,6 +103,17 @@ function isValidCoordinate(lat, lon) {
     parsedLon >= -180 &&
     parsedLon <= 180
   );
+}
+
+function validateOptionalNumber(value, { min, max, name }) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    const err = new Error(`${name} must be between ${min} and ${max}`);
+    err.status = 400;
+    throw err;
+  }
+  return parsed;
 }
 
 function haversineKm(a, b) {
@@ -363,11 +375,15 @@ async function addRoutePoint(taskId, body, user) {
     throw err;
   }
 
-  if (body.timestamp && Number.isNaN(new Date(body.timestamp).getTime())) {
+  const timestamp = body.timestamp ? new Date(body.timestamp) : new Date();
+  if (Number.isNaN(timestamp.getTime())) {
     const err = new Error('Invalid timestamp');
     err.status = 400;
     throw err;
   }
+
+  const speedKph = validateOptionalNumber(body.speedKph, { min: 0, max: 200, name: 'speedKph' });
+  const heading = validateOptionalNumber(body.heading, { min: 0, max: 360, name: 'heading' });
 
   const where = { id };
   if (user.role === 'driver') {
@@ -381,19 +397,66 @@ async function addRoutePoint(taskId, body, user) {
     throw err;
   }
 
+  if (!['in_transit', 'at_utilization'].includes(task.status)) {
+    const err = new Error('Route is not active for GPS tracking');
+    err.status = 400;
+    throw err;
+  }
+
+  const latest = await RoutePoint.findOne({
+    $or: [{ taskId: id }, { routeId: id }],
+  }).sort({ timestamp: -1 }).lean();
+
+  if (latest) {
+    const latestTime = new Date(latest.timestamp).getTime();
+    const deltaMs = timestamp.getTime() - latestTime;
+    if (deltaMs <= 0) {
+      const err = new Error('GPS timestamp must be newer than the latest route point');
+      err.status = 400;
+      throw err;
+    }
+    if (deltaMs < 3000) {
+      const err = new Error('GPS updates are too frequent');
+      err.status = 429;
+      throw err;
+    }
+    if (Number(latest.lat) === lat && Number(latest.lon) === lon) {
+      const err = new Error('Duplicate GPS coordinate ignored');
+      err.status = 409;
+      throw err;
+    }
+  }
+
   const point = await RoutePoint.create({
     routeId: id,
     taskId: id,
     driverId: task.driverId,
     lat,
     lon,
-    speedKph: body.speedKph ?? null,
-    heading: body.heading ?? null,
+    speedKph,
+    heading,
     source: body.source || 'gps',
-    timestamp: body.timestamp ? new Date(body.timestamp) : new Date(),
+    timestamp,
   });
 
-  return point;
+  const routePath = await routeCoordinates(task, null, null, 1000);
+  const payload = {
+    routeId: id,
+    taskId: id,
+    point: {
+      lat,
+      lon,
+      speedKph,
+      heading,
+      timestamp: point.timestamp,
+    },
+    coordinates: routePath.coordinates,
+    distance: distanceKm(routePath.coordinates),
+    status: statusLabel(task.status),
+  };
+
+  emitRoutePoint(id, payload);
+  return { point, live: payload };
 }
 
 function routesToCsv(routes) {

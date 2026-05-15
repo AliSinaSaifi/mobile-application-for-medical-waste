@@ -15,10 +15,22 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.medwaste.mobile"
+      "bundleIdentifier": "com.medwaste.mobile",
+      "infoPlist": {
+        "UIBackgroundModes": ["location"],
+        "NSLocationWhenInUseUsageDescription": "MedWaste uses your location while you are driving an active collection route.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "MedWaste uses background location to continue tracking active collection routes when the app is minimized."
+      }
     },
     "android": {
       "package": "com.medwaste.mobile",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
       }

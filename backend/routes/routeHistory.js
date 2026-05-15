@@ -74,8 +74,8 @@ router.post('/:id/points', async (req, res) => {
       return res.status(403).json({ message: 'Route tracking access required' });
     }
 
-    const point = await addRoutePoint(req.params.id, req.body, req.user);
-    res.status(201).json(point);
+    const result = await addRoutePoint(req.params.id, req.body, req.user);
+    res.status(201).json(result);
   } catch (err) {
     handleError(res, err);
   }

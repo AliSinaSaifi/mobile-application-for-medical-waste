@@ -5,6 +5,8 @@ const Task     = require('../models/pg/Task');
 const { authenticate } = require('../middleware/auth');
 const { setDriverAvailable } = require('../services/redis');
 const { autoAssignUtilizer } = require('../services/autoAssign');
+const { emitRouteStatus } = require('../services/Socket');
+const { Op } = require('sequelize');
 
 // ── POST /api/drivers/register ────────────────────────────────
 router.post('/register', authenticate, async (req, res) => {
@@ -59,7 +61,7 @@ router.get('/tasks', authenticate, async (req, res) => {
     if (!driver) return res.status(404).json({ message: 'Driver profile not found' });
 
     const tasks = await Task.findAll({
-      where: { driverId: driver.id },
+      where: { driverId: { [Op.in]: [driver.id, req.user.userId] } },
       order: [['assignedAt', 'DESC']],
     });
 
@@ -84,7 +86,7 @@ router.patch('/tasks/:id/status', authenticate, async (req, res) => {
     if (!driver) return res.status(404).json({ message: 'Driver profile not found' });
 
     const task = await Task.findOne({
-      where: { id: req.params.id, driverId: driver.id },
+      where: { id: req.params.id, driverId: { [Op.in]: [driver.id, req.user.userId] } },
     });
     if (!task) return res.status(404).json({ message: 'Task not found or not yours' });
 
@@ -92,6 +94,12 @@ router.patch('/tasks/:id/status', authenticate, async (req, res) => {
     if (status === 'completed') updates.completedAt = new Date();
 
     await task.update(updates);
+    emitRouteStatus(task.id, {
+      routeId: task.id,
+      taskId: task.id,
+      status: status === 'cancelled' ? 'cancelled' : 'active',
+      rawStatus: task.status,
+    });
 
     // Когда водитель забрал контейнер — назначить утилизатора
     if (status === 'in_transit') {

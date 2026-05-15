@@ -1,8 +1,14 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Platform, StatusBar as NativeStatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
+import { API_BASE_URL } from './src/config/api';
+import {
+  restoreDriverTracking,
+  startDriverTracking,
+  stopDriverTracking,
+} from './src/services/driverTracking';
 
 function normalizeWebAppUrl(raw) {
   if (raw == null || typeof raw !== 'string') return '';
@@ -19,6 +25,70 @@ if (!WEB_APP_URL) {
 
 export default function App() {
   const androidTopInset = Platform.OS === 'android' ? (NativeStatusBar.currentHeight || 0) : 0;
+  const bridgeScript = useMemo(() => `
+    (function () {
+      if (window.__MW_TRACKING_BRIDGE__) return;
+      window.__MW_TRACKING_BRIDGE__ = true;
+      var lastRouteId = null;
+      var apiBase = ${JSON.stringify(API_BASE_URL)};
+
+      async function checkTracking() {
+        try {
+          var token = window.sessionStorage.getItem('mw_token');
+          var role = window.sessionStorage.getItem('mw_role');
+          if (!token || role !== 'driver') {
+            lastRouteId = null;
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'tracking:stop' }));
+            return;
+          }
+
+          var response = await fetch(apiBase + '/api/drivers/tasks', {
+            headers: { Authorization: 'Bearer ' + token }
+          });
+          if (!response.ok) return;
+          var tasks = await response.json();
+          var active = Array.isArray(tasks)
+            ? tasks.find(function (task) { return task.status === 'in_transit' || task.status === 'at_utilization'; })
+            : null;
+
+          if (active && active.id !== lastRouteId) {
+            lastRouteId = active.id;
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'tracking:start',
+              routeId: active.id,
+              token: token
+            }));
+          } else if (!active && lastRouteId) {
+            lastRouteId = null;
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'tracking:stop' }));
+          }
+        } catch (err) {}
+      }
+
+      checkTracking();
+      window.setInterval(checkTracking, 10000);
+    })();
+    true;
+  `, []);
+
+  useEffect(() => {
+    restoreDriverTracking();
+    return () => {
+      stopDriverTracking();
+    };
+  }, []);
+
+  const handleMessage = async (event) => {
+    try {
+      const message = JSON.parse(event.nativeEvent.data);
+      if (message.type === 'tracking:start') {
+        await startDriverTracking({ routeId: message.routeId, token: message.token });
+      }
+      if (message.type === 'tracking:stop') {
+        await stopDriverTracking();
+      }
+    } catch {}
+  };
 
   return (
     <SafeAreaView style={[styles.container, { paddingTop: androidTopInset }]}>
@@ -30,6 +100,8 @@ export default function App() {
         javaScriptEnabled
         domStorageEnabled
         allowsInlineMediaPlayback
+        injectedJavaScript={bridgeScript}
+        onMessage={handleMessage}
         originWhitelist={['https://', 'http://']}
         renderError={() => (
           <View style={styles.errorWrap}>
