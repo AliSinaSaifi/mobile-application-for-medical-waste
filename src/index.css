@@ -837,8 +837,19 @@ body {
 .mobile-shell .app-main {
     font-size: 14px;
     overflow-x: hidden;
-    padding-left: var(--mobile-nav-reserved);
+    padding-left: 0;
     padding-bottom: 0;
+    box-sizing: border-box;
+}
+
+.mobile-shell .app-main > [class$='-root'] > [class$='-header']:first-child,
+.mobile-shell .app-main > [class*='-root '] > [class$='-header']:first-child,
+.mobile-shell .app-main > [class$='-root'] > [class*='-page-header']:first-child,
+.mobile-shell .app-main > [class*='-root '] > [class*='-page-header']:first-child,
+.mobile-shell .app-main > [class$='-root'] > .db-topbar:first-child,
+.mobile-shell .app-main > [class*='-root '] > .db-topbar:first-child {
+    min-height: var(--mobile-nav-size);
+    padding-left: var(--mobile-nav-reserved) !important;
     box-sizing: border-box;
 }
 
