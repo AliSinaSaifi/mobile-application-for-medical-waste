@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { exportReports, getReports } from "../services/api";
 
 const departments = [
   {
@@ -13,6 +14,15 @@ const departments = [
 const barData = [
   { label: "Auto Registered", fullness: 51, count: 5, weight: 0 },
 ];
+
+const defaultKpis = [
+  { label: "Total Containers", val: "5", sub: "Active in the system" },
+  { label: "Average Fullness", val: "51%", sub: "Average fill level" },
+  { label: "Need Attention", val: "0", sub: "Containers requiring action" },
+  { label: "Total Weight", val: "0.0 kg", sub: "Total waste weight" },
+];
+
+const defaultWasteTypes = [{ name: "Sharp Medical Waste", pct: 100, color: "#1A6EFF" }];
 
 const css = `
   
@@ -144,6 +154,77 @@ function Reports() {
   const [reportType, setReportType]   = useState("overview");
   const [aggregation, setAggregation] = useState("month");
   const [period, setPeriod]           = useState("");
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState("");
+  const [kpis, setKpis]               = useState(defaultKpis);
+  const [departmentRows, setDepartmentRows] = useState(departments);
+  const [departmentBars, setDepartmentBars] = useState(barData);
+  const [wasteTypes, setWasteTypes]   = useState(defaultWasteTypes);
+
+  const params = useMemo(() => ({
+    reportType,
+    aggregation,
+    period,
+  }), [reportType, aggregation, period]);
+
+  const loadReport = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await getReports(params);
+      const apiKpis = data.kpis || {};
+
+      setKpis([
+        { label: "Total Containers", val: String(apiKpis.totalContainers ?? 0), sub: "Active in the system" },
+        { label: "Average Fullness", val: `${apiKpis.averageFullness ?? 0}%`, sub: "Average fill level" },
+        { label: "Need Attention", val: String(apiKpis.needsAttention ?? 0), sub: "Containers requiring action" },
+        { label: "Total Weight", val: `${Number(apiKpis.totalWeight ?? 0).toFixed(1)} kg`, sub: "Total waste weight" },
+      ]);
+      setDepartmentRows(data.departments?.length ? data.departments : []);
+      setDepartmentBars(data.barData?.length ? data.barData : []);
+      setWasteTypes(data.wasteTypeDistribution?.length ? data.wasteTypeDistribution : []);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || "Unable to load reports");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setError("");
+    try {
+      const { data } = await exportReports(params);
+      const url = URL.createObjectURL(data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "medwaste-report.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || "Unable to export report");
+    }
+  };
+
+  useEffect(() => {
+    loadReport();
+  }, [reportType, aggregation]);
+
+  const donutBackground = useMemo(() => {
+    if (!wasteTypes.length) return "conic-gradient(#e4e9f0 0deg 360deg)";
+
+    let current = 0;
+    const stops = wasteTypes.map((w) => {
+      const start = current;
+      current += (Number(w.pct) || 0) * 3.6;
+      return `${w.color} ${start}deg ${current}deg`;
+    });
+    if (current < 360) stops.push(`#e4e9f0 ${current}deg 360deg`);
+    return `conic-gradient(${stops.join(", ")})`;
+  }, [wasteTypes]);
+
+  const primaryWaste = wasteTypes[0] || { name: "No Data", pct: 0 };
 
   return (
     <>
@@ -157,9 +238,9 @@ function Reports() {
             <p>Data analysis and statistics for the waste management system</p>
           </div>
           <div className="rp-header-btns">
-            <button className="rp-btn"> Print</button>
-            <button className="rp-btn"> Export</button>
-            <button className="rp-btn rp-btn-blue">+ Generate Report</button>
+            <button className="rp-btn" onClick={() => window.print()} disabled={loading}> Print</button>
+            <button className="rp-btn" onClick={handleExport} disabled={loading}> Export</button>
+            <button className="rp-btn rp-btn-blue" onClick={loadReport} disabled={loading}>+ Generate Report</button>
           </div>
         </div>
 
@@ -189,21 +270,17 @@ function Reports() {
               </select>
             </div>
             <div className="rp-field" style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-              <button className="rp-btn rp-btn-blue" style={{ width: "100%", justifyContent: "center" }}>
-                 Refresh Data
+              <button className="rp-btn rp-btn-blue" style={{ width: "100%", justifyContent: "center" }} onClick={loadReport} disabled={loading}>
+                 {loading ? "Loading..." : "Refresh Data"}
               </button>
             </div>
           </div>
+          {error && <div style={{ marginTop: 12, color: "#B91C1C", fontSize: "0.82rem" }}>{error}</div>}
         </div>
 
         {/* KPI */}
         <div className="rp-kpi-grid">
-          {[
-            { label: "Total Containers",   val: "5",      sub: "Active in the system" },
-            { label: "Average Fullness",    val: "51%",    sub: "Average fill level" },
-            { label: "Need Attention",      val: "0",      sub: "Containers requiring action" },
-            { label: "Total Weight",        val: "0.0 kg", sub: "Total waste weight" },
-          ].map((k) => (
+          {kpis.map((k) => (
             <div className="rp-kpi-card" key={k.label}>
               <div className="rp-kpi-label">{k.label}</div>
               <div className="rp-kpi-val">{k.val}</div>
@@ -219,7 +296,7 @@ function Reports() {
             {[0, 20, 40, 60, 80, 100].map(v => <span key={v}>{v}</span>)}
           </div>
           <div className="rp-chart-wrap">
-            {barData.map((d) => (
+            {departmentBars.map((d) => (
               <div className="rp-chart-row" key={d.label}>
                 <div className="rp-chart-dept">{d.label}</div>
                 <div className="rp-chart-bars">
@@ -227,7 +304,7 @@ function Reports() {
                     <div className="rp-chart-fill" style={{ width: `${d.fullness}%`, background: "linear-gradient(90deg,#1A6EFF,#00D68F)" }} />
                   </div>
                   <div className="rp-chart-track">
-                    <div className="rp-chart-fill" style={{ width: `${(d.count / 10) * 100}%`, background: "#8B5CF6" }} />
+                    <div className="rp-chart-fill" style={{ width: `${d.countPct ?? (d.count / 10) * 100}%`, background: "#8B5CF6" }} />
                   </div>
                   <div className="rp-chart-track">
                     <div className="rp-chart-fill" style={{ width: `${d.weight}%`, background: "#F59E0B" }} />
@@ -248,14 +325,14 @@ function Reports() {
         <div className="rp-card">
           <div className="rp-card-title">Waste Type Distribution</div>
           <div className="rp-donut-wrap">
-            <div className="rp-donut">
+            <div className="rp-donut" style={{ background: donutBackground }}>
               <div className="rp-donut-inner">
-                <div className="rp-donut-pct">100%</div>
-                <div className="rp-donut-sub">Sharp</div>
+                <div className="rp-donut-pct">{primaryWaste.pct}%</div>
+                <div className="rp-donut-sub">{primaryWaste.name.split(" ")[0]}</div>
               </div>
             </div>
             <div className="rp-waste-list">
-              {[{ name: "Sharp Medical Waste", pct: 100, color: "#1A6EFF" }].map((w) => (
+              {wasteTypes.map((w) => (
                 <div className="rp-waste-row" key={w.name}>
                   <div className="rp-waste-dot" style={{ background: w.color }} />
                   <span className="rp-waste-name">{w.name} ({w.pct}%)</span>
@@ -283,7 +360,7 @@ function Reports() {
               </tr>
             </thead>
             <tbody>
-              {departments.map((dep) => (
+              {departmentRows.map((dep) => (
                 <tr key={dep.name}>
                   <td style={{ fontWeight: 600 }}>{dep.name}</td>
                   <td>{dep.bins}</td>

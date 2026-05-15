@@ -73,3 +73,10 @@ export const getIncomingTasks   = ()         => api.get("/api/utilizer/incoming-
 export const acceptWaste        = (id)       => api.patch(`/api/utilizer/accept-waste/${id}`);
 export const completeProcess    = (id, data) => api.patch(`/api/utilizer/complete-process/${id}`, data);
 export const getUtilizerHistory = ()         => api.get("/api/utilizer/history");
+
+// Reports
+export const getReports = (params = {}) => api.get("/api/reports", { params });
+export const exportReports = (params = {}) => api.get("/api/reports/export", {
+  params,
+  responseType: "blob",
+});
