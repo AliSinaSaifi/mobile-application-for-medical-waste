@@ -1,12 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { exportReports, getReports } from "../services/api";
+import { getReports } from "../services/api";
 
-const emptyKpis = [
+const emptyOverview = {
+  totalContainers: 0,
+  avgFullness: 0,
+  needAttention: 0,
+  totalWeight: 0,
+};
+
+const wasteTypeColors = ["#1A6EFF", "#00D68F", "#F59E0B", "#8B5CF6"];
+
+/*
+
   { label: "Total Containers", val: "—", sub: "Active in the system" },
   { label: "Average Fullness", val: "—", sub: "Average fill level" },
   { label: "Need Attention", val: "—", sub: "Containers requiring action" },
   { label: "Total Weight", val: "—", sub: "Total waste weight" },
-];
+*/
 
 const css = `
   
@@ -138,66 +148,163 @@ function Reports() {
   const [reportType, setReportType]   = useState("overview");
   const [aggregation, setAggregation] = useState("month");
   const [period, setPeriod]           = useState("");
-  const [loading, setLoading]         = useState(false);
-  const [error, setError]             = useState("");
-  const [kpis, setKpis]               = useState(emptyKpis);
-  const [departmentRows, setDepartmentRows] = useState([]);
-  const [departmentBars, setDepartmentBars] = useState([]);
+  const [overview, setOverview]       = useState(emptyOverview);
+  const [departments, setDepartments] = useState([]);
+  const [barData, setBarData]         = useState([]);
   const [wasteTypes, setWasteTypes]   = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState("");
 
   const params = useMemo(() => ({
     reportType,
+    type: reportType,
     aggregation,
     period,
   }), [reportType, aggregation, period]);
 
-  const loadReport = async () => {
+  const normalizeOverview = (data) => {
+    const kpis = data?.kpis || {};
+    const source = data?.overview || {};
+
+    return {
+      totalContainers: Number(source.totalContainers ?? kpis.totalContainers ?? 0),
+      avgFullness: Number(source.avgFullness ?? kpis.averageFullness ?? 0),
+      needAttention: Number(source.needAttention ?? kpis.needsAttention ?? 0),
+      totalWeight: Number(source.totalWeight ?? kpis.totalWeight ?? 0),
+    };
+  };
+
+  const normalizeDepartments = (data) => (
+    Array.isArray(data?.departments)
+      ? data.departments.map((dept) => ({
+          ...dept,
+          bins: Number(dept.bins ?? 0),
+          avgFullness: Number(dept.avgFullness ?? 0),
+          totalWeight: Number(dept.totalWeight ?? 0),
+          needsAttention: Number(dept.needsAttention ?? 0),
+        }))
+      : []
+  );
+
+  const normalizeWasteTypes = (data, totalContainers) => {
+    const source = Array.isArray(data?.wasteTypes)
+      ? data.wasteTypes
+      : Array.isArray(data?.wasteTypeDistribution)
+        ? data.wasteTypeDistribution
+        : [];
+
+    return source.map((item, index) => {
+      const count = Number(item.count ?? 0);
+      const pct = Number(item.pct ?? (totalContainers ? Math.round((count / totalContainers) * 100) : 0));
+
+      return {
+        ...item,
+        name: item.name || `Type ${item.type || index + 1}`,
+        count,
+        pct,
+        color: item.color || wasteTypeColors[index % wasteTypeColors.length],
+      };
+    });
+  };
+
+  const buildBarData = (data, nextDepartments, nextWasteTypes, nextOverview) => {
+    if (Array.isArray(data?.barData) && data.barData.length) {
+      return data.barData.map((item) => ({
+        ...item,
+        fullness: Number(item.fullness ?? 0),
+        count: Number(item.count ?? 0),
+        countPct: Number(item.countPct ?? 0),
+        weight: Number(item.weight ?? 0),
+      }));
+    }
+
+    if (nextWasteTypes.length) {
+      return nextWasteTypes.map((item) => ({
+        label: item.name,
+        fullness: item.pct,
+        count: Math.round((item.pct / 100) * Math.max(nextOverview.totalContainers, 1)),
+        countPct: item.pct,
+        weight: 0,
+      }));
+    }
+
+    const maxContainers = Math.max(1, ...nextDepartments.map((dept) => dept.bins));
+    const maxWeight = Math.max(1, ...nextDepartments.map((dept) => dept.totalWeight));
+
+    return nextDepartments.map((dept) => ({
+      label: dept.name,
+      fullness: dept.avgFullness,
+      count: dept.bins,
+      countPct: Math.round((dept.bins / maxContainers) * 100),
+      weight: Math.round((dept.totalWeight / maxWeight) * 100),
+    }));
+  };
+
+  const loadReports = async () => {
     setLoading(true);
     setError("");
     try {
-      const { data } = await getReports(params);
-      const apiKpis = data.kpis || {};
+      const res = await getReports(params);
+      const data = res.data || {};
+      const nextOverview = normalizeOverview(data);
+      const nextDepartments = normalizeDepartments(data);
+      const nextWasteTypes = normalizeWasteTypes(data, nextOverview.totalContainers);
+      const nextBarData = buildBarData(data, nextDepartments, nextWasteTypes, nextOverview);
 
-      setKpis([
-        { label: "Total Containers", val: String(apiKpis.totalContainers ?? 0), sub: "Active in the system" },
-        { label: "Average Fullness", val: `${apiKpis.averageFullness ?? 0}%`, sub: "Average fill level" },
-        { label: "Need Attention", val: String(apiKpis.needsAttention ?? 0), sub: "Containers requiring action" },
-        { label: "Total Weight", val: `${Number(apiKpis.totalWeight ?? 0).toFixed(1)} kg`, sub: "Total waste weight" },
-      ]);
-      setDepartmentRows(data.departments?.length ? data.departments : []);
-      setDepartmentBars(data.barData?.length ? data.barData : []);
-      setWasteTypes(data.wasteTypeDistribution?.length ? data.wasteTypeDistribution : []);
+      setOverview(nextOverview);
+      setDepartments(nextDepartments);
+      setWasteTypes(nextWasteTypes);
+      setBarData(nextBarData);
     } catch (err) {
       setError(err.response?.data?.error || err.message || "Unable to load reports");
-      setKpis(emptyKpis);
-      setDepartmentRows([]);
-      setDepartmentBars([]);
+      setOverview(emptyOverview);
+      setDepartments([]);
+      setBarData([]);
       setWasteTypes([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleExport = async () => {
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleExport = () => {
     setError("");
     try {
-      const { data } = await exportReports(params);
-      const url = URL.createObjectURL(data);
+      const csvRows = [];
+      const headers = ["Department", "Containers", "Avg Fullness", "Weight", "Attention"];
+      csvRows.push(headers.join(","));
+
+      departments.forEach((dept) => {
+        csvRows.push([
+          dept.name,
+          dept.bins,
+          dept.avgFullness,
+          dept.totalWeight,
+          dept.needsAttention,
+        ].join(","));
+      });
+
+      const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url;
-      link.download = "medwaste-report.csv";
+      link.setAttribute("hidden", "");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `report_${new Date().toLocaleDateString()}.csv`);
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err.response?.data?.error || err.message || "Unable to export report");
+      setError(err.message || "Unable to export report");
     }
   };
 
   useEffect(() => {
-    loadReport();
-  }, [reportType, aggregation]);
+    loadReports();
+  }, []);
 
   const donutBackground = useMemo(() => {
     if (!wasteTypes.length) return "conic-gradient(#e4e9f0 0deg 360deg)";
@@ -213,6 +320,12 @@ function Reports() {
   }, [wasteTypes]);
 
   const primaryWaste = wasteTypes[0] || { name: "No Data", pct: 0 };
+  const kpis = [
+    { label: "Total Containers", val: overview.totalContainers, sub: "Active in the system" },
+    { label: "Average Fullness", val: `${overview.avgFullness}%`, sub: "Average fill level" },
+    { label: "Need Attention", val: overview.needAttention, sub: "Containers requiring action" },
+    { label: "Total Weight", val: `${overview.totalWeight.toFixed(1)} kg`, sub: "Total waste weight" },
+  ];
 
   return (
     <>
@@ -226,9 +339,9 @@ function Reports() {
             <p>Data analysis and statistics for the waste management system</p>
           </div>
           <div className="rp-header-btns">
-            <button className="rp-btn" onClick={() => window.print()} disabled={loading}> Print</button>
+            <button className="rp-btn" onClick={handlePrint} disabled={loading}> Print</button>
             <button className="rp-btn" onClick={handleExport} disabled={loading}> Export</button>
-            <button className="rp-btn rp-btn-blue" onClick={loadReport} disabled={loading}>+ Generate Report</button>
+            <button className="rp-btn rp-btn-blue" onClick={() => saveOfficialReport(overview, departments)} disabled={loading}>+ Generate Report</button>
           </div>
         </div>
 
@@ -258,7 +371,7 @@ function Reports() {
               </select>
             </div>
             <div className="rp-field" style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-              <button className="rp-btn rp-btn-blue" style={{ width: "100%", justifyContent: "center" }} onClick={loadReport} disabled={loading}>
+              <button className="rp-btn rp-btn-blue" style={{ width: "100%", justifyContent: "center" }} onClick={loadReports} disabled={loading}>
                  {loading ? "Loading..." : "Refresh Data"}
               </button>
             </div>
@@ -284,11 +397,11 @@ function Reports() {
             {[0, 20, 40, 60, 80, 100].map(v => <span key={v}>{v}</span>)}
           </div>
           <div className="rp-chart-wrap">
-            {departmentBars.length === 0 ? (
+            {barData.length === 0 ? (
               <div style={{ padding: 20, color: "#a0aec0", textAlign: "center" }}>
                 {loading ? "Loading report data..." : "No department data available."}
               </div>
-            ) : departmentBars.map((d) => (
+            ) : barData.map((d) => (
               <div className="rp-chart-row" key={d.label}>
                 <div className="rp-chart-dept">{d.label}</div>
                 <div className="rp-chart-bars">
@@ -356,13 +469,13 @@ function Reports() {
               </tr>
             </thead>
             <tbody>
-              {departmentRows.length === 0 ? (
+              {departments.length === 0 ? (
                 <tr>
                   <td colSpan="5" style={{ textAlign: "center", color: "#a0aec0", padding: 24 }}>
                     {loading ? "Loading department statistics..." : "No department statistics available."}
                   </td>
                 </tr>
-              ) : departmentRows.map((dep) => (
+              ) : departments.map((dep) => (
                 <tr key={dep.name}>
                   <td style={{ fontWeight: 600 }}>{dep.name}</td>
                   <td>{dep.bins}</td>
@@ -390,5 +503,79 @@ function Reports() {
     </>
   );
 }
+
+const saveOfficialReport = (overview, departments) => {
+  const now = new Date();
+  const fileName = `Report_Form_IV_${now.toISOString().split("T")[0]}.html`;
+  const safeDepartments = Array.isArray(departments) ? departments : [];
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Form IV - ${now.getFullYear()}</title>
+      <style>
+        body { font-family: 'Times New Roman', serif; line-height: 1.5; padding: 40px; color: #000; }
+        .tbl { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .tbl th, .tbl td { border: 1px solid #000; padding: 8px; font-size: 13px; text-align: left; }
+        .header { text-align: center; font-weight: bold; text-transform: uppercase; font-size: 16px; margin-bottom: 20px; }
+        .footer { margin-top: 50px; display: flex; justify-content: space-between; }
+        @media print { .no-save { display: none; } }
+      </style>
+    </head>
+    <body>
+      <div style="text-align:right">No.IMG/MED/${now.getFullYear()}/${Math.floor(Math.random() * 10000)}</div>
+      <div class="header">Form - IV <br> (See rule 13) <br> ANNUAL REPORT</div>
+
+      <table class="tbl">
+        <thead>
+          <tr><th>SI No.</th><th>Particulars</th><th>Details</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td><b>Authorised Person</b></td><td>Dilara Galimkyzy</td></tr>
+          <tr><td>2</td><td><b>Facility Name</b></td><td>MedVault KTM.0810</td></tr>
+          <tr><td>3</td><td><b>Address & GPS</b></td><td>Astana, Kazakhstan (9.6814, 76.6439)</td></tr>
+          <tr><td>4</td><td><b>Logistics & Collection Log</b></td>
+            <td>
+              <table class="tbl" style="margin:0; width: 100%;">
+                <tr><th>Department</th><th>Driver</th><th>Vehicle</th><th>Fullness</th></tr>
+                ${safeDepartments.map((dept) => `
+                  <tr>
+                    <td>${dept.name || ""}</td>
+                    <td>${dept.driver || ""}</td>
+                    <td>${dept.plate || ""}</td>
+                    <td>${Number(dept.avgFullness || 0)}%</td>
+                  </tr>
+                `).join("")}
+              </table>
+            </td>
+          </tr>
+          <tr><td>5</td><td><b>Summary Statistics</b></td><td>Total Bins: ${overview.totalContainers} | Avg. Level: ${overview.avgFullness}% | Total Weight: ${overview.totalWeight.toFixed(1)} kg</td></tr>
+        </tbody>
+      </table>
+
+      <div class="footer">
+        <div>Date of issue: ${now.toLocaleDateString()}</div>
+        <div style="text-align: center;">
+          <br>__________________________<br>
+          Authorized Signature
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob([htmlContent], { type: "text/html" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 
 export default Reports;
